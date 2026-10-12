@@ -1,0 +1,354 @@
+/* ═══════════════════════════════════════════════════════════════════ */
+/*  IntroAnimation                                                    */
+/* ═══════════════════════════════════════════════════════════════════ */
+
+
+/* ─── Overlay (blocks interaction during intro) ─── */
+
+.intro-overlay--IA {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    pointer-events: all;
+    background: #121212;
+    transition: opacity 1.0s ease, background 1.0s ease;
+}
+
+.intro-overlay--IA.fading {
+    opacity: 0;
+    background: transparent;
+    pointer-events: none;
+}
+
+
+/* ─── Upper door (retracts to become the top bar) ─── */
+
+.intro-upper-door--IA {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 50vh;
+    z-index: 10001;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    background:
+        repeating-linear-gradient(
+            0deg,
+            transparent 0px, transparent 2px,
+            rgba(255, 255, 255, 0.012) 2px, rgba(255, 255, 255, 0.012) 4px
+        ),
+        linear-gradient(180deg,
+            #1a1a1a 0%,
+            #222 35%,
+            #2a2a2a 50%,
+            #222 65%,
+            #1c1c1c 100%
+        );
+    box-shadow:
+        0 4px 30px rgba(0, 0, 0, 0.8),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.05),
+        inset 0 1px 0 rgba(255, 255, 255, 0.02);
+    transition:
+        height 1.4s cubic-bezier(0.22, 1, 0.36, 1),
+        background 1.4s ease,
+        box-shadow 1.4s ease;
+}
+
+.intro-upper-door--IA.opening,
+.intro-upper-door--IA.fading {
+    height: 80px;
+    background: linear-gradient(to right,
+        rgba(34, 34, 34, 0.5),
+        rgba(42, 42, 42, 0.5),
+        rgba(34, 34, 34, 0.5)
+    );
+    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+}
+
+
+/* ─── Lower door (retracts downward off screen) ─── */
+
+.intro-lower-door--IA {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 50vh;
+    z-index: 10001;
+    overflow: hidden;
+    background:
+        repeating-linear-gradient(
+            0deg,
+            transparent 0px, transparent 2px,
+            rgba(255, 255, 255, 0.012) 2px, rgba(255, 255, 255, 0.012) 4px
+        ),
+        linear-gradient(0deg,
+            #1a1a1a 0%,
+            #222 35%,
+            #2a2a2a 50%,
+            #222 65%,
+            #1c1c1c 100%
+        );
+    box-shadow:
+        0 -4px 30px rgba(0, 0, 0, 0.8),
+        inset 0 1px 0 rgba(255, 255, 255, 0.05),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.02);
+    transition: transform 1.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.intro-lower-door--IA.opening,
+.intro-lower-door--IA.fading {
+    transform: translateY(100%);
+}
+
+
+/* ─── Seam (glowing line where the doors meet) ─── */
+
+.intro-seam-upper--IA {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(to right,
+        transparent 3%,
+        rgba(255, 127, 50, 0.2) 15%,
+        rgba(255, 127, 50, 0.6) 50%,
+        rgba(255, 127, 50, 0.2) 85%,
+        transparent 97%
+    );
+    box-shadow:
+        0 0 12px rgba(255, 127, 50, 0.25),
+        0 0 30px rgba(255, 127, 50, 0.1);
+    transition: opacity 0.6s ease;
+}
+
+.intro-upper-door--IA.opening .intro-seam-upper--IA {
+    opacity: 0;
+}
+
+.intro-seam-lower--IA {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(to right,
+        transparent 3%,
+        rgba(255, 127, 50, 0.2) 15%,
+        rgba(255, 127, 50, 0.6) 50%,
+        rgba(255, 127, 50, 0.2) 85%,
+        transparent 97%
+    );
+    box-shadow:
+        0 0 12px rgba(255, 127, 50, 0.25),
+        0 0 30px rgba(255, 127, 50, 0.1);
+    transition: opacity 0.6s ease;
+}
+
+.intro-lower-door--IA.opening .intro-seam-lower--IA {
+    opacity: 0;
+}
+
+
+/* ─── Specular shine sweep ─── */
+
+.intro-shine-upper--IA {
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(
+        105deg,
+        transparent 40%,
+        rgba(255, 255, 255, 0.03) 45%,
+        rgba(255, 255, 255, 0.06) 50%,
+        rgba(255, 255, 255, 0.03) 55%,
+        transparent 60%
+    );
+    animation: shineSlide--IA 2.2s ease 0.2s forwards;
+    pointer-events: none;
+}
+
+.intro-shine-lower--IA {
+    position: absolute;
+    top: 0;
+    right: -100%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(
+        75deg,
+        transparent 40%,
+        rgba(255, 255, 255, 0.03) 45%,
+        rgba(255, 255, 255, 0.06) 50%,
+        rgba(255, 255, 255, 0.03) 55%,
+        transparent 60%
+    );
+    animation: shineSlideReverse--IA 2.2s ease 0.4s forwards;
+    pointer-events: none;
+}
+
+@keyframes shineSlide--IA {
+    from { left: -60%; }
+    to   { left: 160%; }
+}
+
+@keyframes shineSlideReverse--IA {
+    from { right: -60%; }
+    to   { right: 160%; }
+}
+
+
+/* ─── "SUEZ presents" block (centered, appears first) ─── */
+
+.intro-presents-block--IA {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    opacity: 0;
+    filter: blur(10px);
+    transform: scale(0.9);
+    transition:
+        opacity 1.2s ease,
+        filter 1.2s ease,
+        transform 1.2s ease;
+}
+
+.intro-presents-block--IA.visible {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+}
+
+.intro-presents-block--IA.fade-out {
+    opacity: 0;
+    filter: blur(6px);
+    transform: scale(1.05);
+    transition:
+        opacity 0.8s ease,
+        filter 0.8s ease,
+        transform 0.8s ease;
+}
+
+.intro-presents-logo--IA {
+    height: 72px;
+    width: 72px;
+    filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.1));
+}
+
+.intro-presents-text--IA {
+    color: rgba(255, 255, 255, 0.35);
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+    font-size: 15px;
+    font-weight: 300;
+    letter-spacing: 6px;
+    text-transform: lowercase;
+    font-style: italic;
+    opacity: 0;
+    transform: translateY(-4px);
+    transition:
+        opacity 0.9s ease,
+        transform 0.9s ease;
+}
+
+.intro-presents-text--IA.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+
+/* ─── Anomaly Sentinel title (materializes after presents fades) ─── */
+
+.intro-title--IA {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    opacity: 0;
+    filter: blur(12px);
+    transform: scale(0.92);
+    transition:
+        opacity 1.2s ease,
+        filter 1.2s ease,
+        transform 1.2s ease;
+}
+
+.intro-title--IA.visible {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+}
+
+.intro-anomaly--IA {
+    color: rgba(255, 255, 255, 0.92);
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+    font-weight: 400;
+    letter-spacing: 5px;
+    font-size: 38px;
+    text-shadow:
+        0 0 3px rgba(0, 0, 0, 0.6),
+        0 0 20px rgba(255, 255, 255, 0.15),
+        0 0 40px rgba(255, 255, 255, 0.05);
+    text-transform: uppercase;
+}
+
+.intro-separator--IA {
+    width: 2px;
+    height: 28px;
+    background: linear-gradient(to bottom,
+        transparent,
+        rgba(255, 255, 255, 0.7) 30%,
+        #ff7f32 70%,
+        transparent
+    );
+    margin: 0 14px;
+    opacity: 0.5;
+    border-radius: 1px;
+}
+
+.intro-sentinel--IA {
+    color: #ff7f32;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+    font-weight: 600;
+    letter-spacing: 4px;
+    font-size: 38px;
+    text-shadow:
+        0 0 6px rgba(255, 127, 50, 0.3),
+        0 0 25px rgba(255, 127, 50, 0.4),
+        0 0 50px rgba(255, 127, 50, 0.15);
+    text-transform: uppercase;
+}
+
+
+/* ─── SUEZ logo top-left (materializes during opening phase) ─── */
+
+.intro-suez-logo--IA {
+    position: absolute;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    opacity: 0;
+    filter: blur(4px);
+    transition:
+        opacity 0.8s ease 0.3s,
+        filter 0.8s ease 0.3s;
+    pointer-events: none;
+}
+
+.intro-suez-logo--IA.visible {
+    opacity: 1;
+    filter: blur(0);
+}
+
+.intro-suez-logo--IA img {
+    height: 48px;
+}

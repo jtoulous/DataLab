@@ -1,0 +1,12 @@
+venv
+.venv
+data
+*/data
+*.db
+*.db-wal
+*.db-shm
+__pycache__
+*/__pycache__
+node_modules
+dist
+.claude/settings.local.json

@@ -1,0 +1,21 @@
+.footer-container {
+    width: 100%;
+    background-color: #121212;
+    color: #999999;
+    font-size: 13px;
+    text-align: center;
+    padding: 20px 0;
+    font-family: 'Segoe UI', sans-serif;
+    margin-top: 200px;
+    animation: fadeInUp 1.0s ease-out backwards;
+    transition: all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.footer-text {
+    opacity: 0.65;
+    transition: opacity 0.5s ease;
+}
+
+.footer-container:hover .footer-text {
+    opacity: 0.9;
+}

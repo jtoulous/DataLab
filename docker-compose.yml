@@ -1,0 +1,30 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8010:8010"
+    volumes:
+      - ${DV_DATA_DIR:-./data}:/app/data
+      - ./backend:/app
+    environment:
+      - PYTHONPATH=/app
+      - DATA_PATH=/app/data
+    command: >
+      sh -c "mkdir -p /app/data && exec python backend.py run_dev"
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8011:8011"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+    environment:
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    command: >
+      sh -c "npm install && npm run dev -- --host"
+
+    depends_on:
+      - backend

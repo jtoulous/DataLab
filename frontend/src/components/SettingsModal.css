@@ -1,0 +1,364 @@
+/* ================================================ */
+/*               Settings Backdrop                  */
+/* ================================================ */
+
+.settings-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(0px);
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition: opacity 0.3s ease, backdrop-filter 0.3s ease;
+    pointer-events: none;
+}
+
+.settings-backdrop.visible {
+    opacity: 1;
+    backdrop-filter: blur(6px);
+    pointer-events: all;
+}
+
+/* ================================================ */
+/*               Settings Modal                     */
+/* ================================================ */
+
+.settings-modal {
+    background: #1e1e1e;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    width: 720px; /* Agrandi de 580px à 720px */
+    max-height: 85vh;
+    overflow-y: auto;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6), 0 0 40px rgba(255, 153, 0, 0.05);
+    transform: translateY(20px) scale(0.96);
+    opacity: 0;
+    transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.25s ease;
+}
+
+.settings-modal.visible {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+}
+
+/* ================================================ */
+/*               Header                             */
+/* ================================================ */
+
+.settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 28px 32px 18px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.settings-header h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+}
+
+.settings-close-btn {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.35);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.25s ease;
+}
+
+.settings-close-btn:hover {
+    color: #ff7f32;
+    background: rgba(255, 127, 50, 0.1);
+}
+
+/* ================================================ */
+/*               Body                               */
+/* ================================================ */
+
+.settings-body {
+    padding: 24px 32px 32px;
+}
+
+/* ================================================ */
+/*               Section Principale                 */
+/* ================================================ */
+
+.settings-section {
+    margin-bottom: 28px;
+}
+
+.settings-section--main {
+    background: rgba(255, 255, 255, 0.025);
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    overflow: hidden;
+}
+
+.settings-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 24px 12px 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.settings-section-title {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+}
+
+/* ================================================ */
+/*               Contenu de la section              */
+/* ================================================ */
+
+.settings-section-content {
+    padding: 4px 0;
+}
+
+.settings-section-content .setting-row {
+    padding: 16px 24px 16px 40px;
+    margin-bottom: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    border-radius: 0;
+    background: transparent;
+}
+
+.settings-section-content .setting-row:last-child {
+    border-bottom: none;
+}
+
+.settings-section-content .setting-row:hover {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+/* ================================================ */
+/*               Setting Row                        */
+/* ================================================ */
+
+.setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    margin-bottom: 10px;
+    transition: all 0.5s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+.setting-row:hover {
+    background: rgba(255, 255, 255, 0.045);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.setting-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    flex: 1;
+    margin-right: 20px;
+}
+
+.setting-label-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.setting-label {
+    font-size: 15px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.88);
+}
+
+.setting-description {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.35);
+    line-height: 1.4;
+}
+
+/* ================================================ */
+/*               Badges                            */
+/* ================================================ */
+
+.setting-badge {
+    font-size: 9px;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 12px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+}
+
+.setting-badge--experimental {
+    background: rgba(255, 127, 50, 0.15);
+    color: #ff7f32;
+    border: 1px solid rgba(255, 127, 50, 0.15);
+}
+
+.setting-badge--stable {
+    background: rgba(76, 175, 80, 0.12);
+    color: #4caf50;
+    border: 1px solid rgba(76, 175, 80, 0.12);
+}
+
+/* ================================================ */
+/*               Toggle Switch                      */
+/* ================================================ */
+
+.toggle {
+    position: relative;
+    width: 50px;
+    height: 28px;
+    border-radius: 14px;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+    transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+
+.toggle.active {
+    background: #ff7f32;
+    box-shadow: 0 0 14px rgba(255, 127, 50, 0.35);
+}
+
+.toggle-knob {
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    pointer-events: none;
+}
+
+.toggle.active .toggle-knob {
+    transform: translateX(22px);
+}
+
+.toggle:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.toggle.active:hover {
+    background: #ff9040;
+    box-shadow: 0 0 20px rgba(255, 127, 50, 0.45);
+}
+
+/* ================================================ */
+/*               Setting Row - Active               */
+/* ================================================ */
+
+.setting-row--active {
+    border-color: rgba(255, 127, 50, 0.15);
+    background: rgba(255, 127, 50, 0.04);
+    transition: all 0.5s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+/* ================================================ */
+/*          Claude Trading additions                */
+/* ================================================ */
+
+.setting-row--column {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.setting-input--MS {
+    padding: 8px 10px;
+    border-radius: 6px;
+    border: 1.5px solid rgba(255, 127, 50, 0.3);
+    background: #161616;
+    color: #fff;
+    font-size: 13px;
+    color-scheme: dark;
+}
+
+.setting-input--MS:focus {
+    outline: none;
+    border-color: #ff7f32;
+}
+
+.setting-warning--MS {
+    font-size: 12px;
+    color: #ffb74d;
+    background: rgba(255, 183, 77, 0.06);
+    border: 1px solid rgba(255, 183, 77, 0.15);
+    padding: 8px 12px;
+    border-radius: 8px;
+}
+
+.setting-actions--MS {
+    display: flex;
+    justify-content: flex-end;
+    padding: 12px 24px 16px;
+}
+
+.settings-section--danger--MS {
+    border-color: rgba(239, 83, 80, 0.15);
+}
+
+.danger-button--MS {
+    padding: 8px 16px;
+    border-radius: 6px;
+    border: 1.5px solid rgba(239, 83, 80, 0.5);
+    background: transparent;
+    color: #ef5350;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+
+.danger-button--MS:hover,
+.danger-button--MS.confirm {
+    background: #ef5350;
+    color: #1e1e1e;
+}
+
+.settings-feedback--MS {
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    animation: fadeInUp 0.3s ease-out;
+}
+
+.settings-feedback--MS.error {
+    color: #ff8a80;
+    background: rgba(239, 83, 80, 0.08);
+    border: 1px solid rgba(239, 83, 80, 0.25);
+}
+
+.settings-feedback--MS.success {
+    color: #69f0ae;
+    background: rgba(0, 230, 118, 0.06);
+    border: 1px solid rgba(0, 230, 118, 0.2);
+}

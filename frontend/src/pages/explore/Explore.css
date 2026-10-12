@@ -1,0 +1,886 @@
+/*===========================================================*/
+/*                      Explore layout                       */
+/*===========================================================*/
+
+.explore--EX {
+    display: grid;
+    grid-template-columns: 320px minmax(0, 1fr);
+    gap: 18px;
+    padding: 20px 18px 0 26px;
+    box-sizing: border-box;
+}
+
+.ex-sidebar--EX {
+    position: sticky;
+    top: 210px;
+    align-self: start;
+    max-height: calc(100vh - 226px);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-right: 4px;
+}
+
+.header-collapsed .ex-sidebar--EX {
+    top: 16px;
+    max-height: calc(100vh - 32px);
+}
+
+.ex-side--EX {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: 14px 16px 16px;
+    border-radius: 12px;
+    background: linear-gradient(155deg, rgba(32, 32, 32, 0.86) 0%, rgba(24, 24, 24, 0.92) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.ex-side--EX h3 {
+    margin: 0 0 2px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    color: rgba(255, 183, 77, 0.8);
+}
+
+.ex-side--EX h3 span {
+    font-size: 10px;
+    color: #ff7f32;
+    background: rgba(255, 127, 50, 0.12);
+    padding: 1px 7px;
+    border-radius: 8px;
+}
+
+.ex-editor--EX {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+.ex-editor--EX input,
+.ex-editor--EX textarea,
+.ex-search--EX,
+.ex-workspace--EX input,
+.ex-workspace--EX select {
+    padding: 7px 10px;
+    border-radius: 7px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #141418;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 12.5px;
+    color-scheme: dark;
+    min-width: 0;
+}
+
+.ex-editor--EX textarea {
+    resize: vertical;
+    min-height: 54px;
+    line-height: 1.5;
+}
+
+.ex-editor--EX input:focus,
+.ex-editor--EX textarea:focus,
+.ex-search--EX:focus {
+    outline: none;
+    border-color: rgba(255, 127, 50, 0.6);
+}
+
+.ex-editor-actions--EX {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.ex-editor-actions--EX .form-button {
+    font-size: 13px;
+    padding: 6px 14px;
+}
+
+.ex-preview--EX {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.25);
+}
+
+.ex-preview-stats--EX {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.ex-preview-stats--EX b {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.ex-lookahead--EX {
+    margin-bottom: 8px;
+    padding: 6px 10px;
+    border-radius: 7px;
+    background: rgba(239, 83, 80, 0.07);
+    border: 1px solid rgba(239, 83, 80, 0.2);
+    font-size: 11px;
+    font-weight: 600;
+    color: #ff8a80;
+}
+
+.ex-lookahead--EX.ok {
+    background: rgba(57, 135, 229, 0.07);
+    border-color: rgba(57, 135, 229, 0.25);
+    color: #8ab8f0;
+}
+
+.ex-error--EX {
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: rgba(239, 83, 80, 0.08);
+    border: 1px solid rgba(239, 83, 80, 0.25);
+    color: #ff8a80;
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
+.ex-error--EX.small {
+    padding: 6px 9px;
+    font-size: 11px;
+}
+
+.ex-link--EX {
+    align-self: flex-start;
+    padding: 0;
+    border: none;
+    background: none;
+    color: rgba(255, 183, 77, 0.7);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.ex-functions--EX {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    max-height: 340px;
+    overflow-y: auto;
+    padding: 8px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.25);
+}
+
+.ex-functions--EX div {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.ex-functions--EX code {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: #ffb74d;
+}
+
+.ex-functions--EX span {
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.ex-functions--EX .lookahead code {
+    color: #ff8a80;
+}
+
+.ex-columns-side--EX {
+    min-height: 200px;
+}
+
+.ex-columns--EX {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    max-height: 460px;
+    overflow-y: auto;
+}
+
+.ex-columns-group--EX {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 10px 0 4px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.35);
+}
+
+.ex-columns-empty--EX {
+    font-size: 11.5px;
+    font-style: italic;
+    color: rgba(255, 255, 255, 0.28);
+}
+
+.ex-column--EX {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 5px 8px;
+    border-radius: 7px;
+    transition: background 0.2s ease;
+}
+
+.ex-column--EX:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.ex-column--EX > div:first-child {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.ex-column--EX b {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.88);
+}
+
+.ex-column--EX.derived b {
+    color: #69f0ae;
+}
+
+.ex-column--EX span,
+.ex-column--EX code {
+    font-size: 10.5px;
+    color: rgba(255, 255, 255, 0.38);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ex-column--EX code {
+    font-family: var(--font-mono);
+}
+
+.ex-column-actions--EX {
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.ex-column--EX:hover .ex-column-actions--EX {
+    opacity: 1;
+}
+
+.ex-column-actions--EX button {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: 5px;
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.ex-column-actions--EX button:hover {
+    background: rgba(255, 127, 50, 0.2);
+    color: #ffb74d;
+}
+
+
+/*===========================================================*/
+/*                         Workspace                         */
+/*===========================================================*/
+
+.ex-main--EX {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.ex-toolbar--EX {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.ex-top-btn--EX {
+    margin: 0;
+    padding: 8px 16px;
+    font-size: 13px;
+    animation: none;
+}
+
+.ex-add--EX {
+    position: relative;
+}
+
+.ex-add-menu--EX {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 60;
+    width: 760px;
+    max-height: 70vh;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px 12px;
+    padding: 10px;
+    border-radius: 12px;
+    background: #1e1e1e;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+    animation: fadeInUp 0.2s ease-out;
+}
+
+.ex-add-group--EX {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ex-add-group--EX > span {
+    margin: 6px 8px 2px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: rgba(255, 183, 77, 0.7);
+}
+
+.ex-add-group--EX button {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px;
+    border: none;
+    border-radius: 8px;
+    background: transparent;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.ex-add-group--EX button:hover:not(:disabled) {
+    background: rgba(255, 127, 50, 0.08);
+}
+
+.ex-add-group--EX button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.ex-add-group--EX button div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.ex-add-group--EX b {
+    font-size: 12.5px;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.ex-add-group--EX button div span {
+    font-size: 11px;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, 0.42);
+}
+
+.ex-workspace--EX {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+}
+
+.ex-workspace--EX input {
+    width: 160px;
+}
+
+.ex-empty--EX {
+    margin-top: 30px;
+}
+
+.ex-panels--EX {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    align-items: start;
+}
+
+
+/*===========================================================*/
+/*                           Panel                           */
+/*===========================================================*/
+
+.ex-panel--EX {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    border-radius: 14px;
+    background: linear-gradient(155deg, rgba(32, 32, 32, 0.86) 0%, rgba(24, 24, 24, 0.92) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    animation: fadeInUp 0.5s ease-out backwards;
+    transition: border-color 0.4s ease;
+}
+
+.ex-panel--EX:hover {
+    border-color: rgba(255, 255, 255, 0.13);
+}
+
+.ex-panel--EX.wide {
+    grid-column: 1 / -1;
+}
+
+.ex-panel-header--EX {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 14px 14px 0 0;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 60%, rgba(255, 255, 255, 0) 100%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.ex-panel-icon--EX {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    flex-shrink: 0;
+    border-radius: 8px;
+    background: rgba(255, 127, 50, 0.1);
+    color: #ff7f32;
+    font-size: 15px;
+}
+
+.ex-panel-title--EX {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.ex-panel-title--EX b {
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.92);
+}
+
+.ex-panel-title--EX span {
+    font-size: 11.5px;
+    color: rgba(255, 255, 255, 0.4);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.ex-panel-actions--EX {
+    display: flex;
+    gap: 3px;
+    opacity: 0.35;
+    transition: opacity 0.2s ease;
+}
+
+.ex-panel--EX:hover .ex-panel-actions--EX {
+    opacity: 1;
+}
+
+.ex-panel-actions--EX button {
+    min-width: 26px;
+    height: 26px;
+    padding: 0 5px;
+    border: none;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.ex-panel-actions--EX button:hover {
+    background: rgba(255, 127, 50, 0.18);
+    color: #ffb74d;
+}
+
+.ex-panel-actions--EX button.danger:hover {
+    background: rgba(239, 83, 80, 0.18);
+    color: #ef5350;
+}
+
+.ex-panel-params--EX {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 10px 14px;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    background: rgba(0, 0, 0, 0.12);
+}
+
+.ex-field--EX {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1 1 180px;
+    min-width: 0;
+}
+
+.ex-field--EX.wide {
+    flex: 1 1 100%;
+}
+
+.ex-field--EX.small {
+    flex: 0 1 120px;
+}
+
+.ex-field--EX > span {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.38);
+}
+
+.ex-field--EX input,
+.ex-field--EX select {
+    padding: 7px 10px;
+    border-radius: 7px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #141418;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 12.5px;
+    color-scheme: dark;
+    min-width: 0;
+}
+
+.ex-field--EX input:focus {
+    outline: none;
+    border-color: rgba(255, 127, 50, 0.6);
+}
+
+.ex-chips--EX {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 5px;
+    padding: 4px;
+    border-radius: 7px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #141418;
+}
+
+.ex-chips--EX input {
+    flex: 1 1 160px;
+    border: none !important;
+    background: transparent !important;
+    padding: 4px 6px !important;
+}
+
+.ex-chip--EX {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 4px 3px 8px;
+    border-radius: 6px;
+    background: rgba(255, 127, 50, 0.1);
+    border: 1px solid rgba(255, 127, 50, 0.25);
+}
+
+.ex-chip--EX code {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: #ffb74d;
+}
+
+.ex-chip--EX button {
+    border: none;
+    background: none;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 10px;
+    cursor: pointer;
+}
+
+.ex-chip--EX button:hover {
+    color: #ef5350;
+}
+
+.ex-toggle--EX {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 4px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+}
+
+.ex-toggle--EX .toggle {
+    transform: scale(0.75);
+    transform-origin: left center;
+    margin-right: -10px;
+}
+
+.ex-groupby--EX {
+    flex: 1 1 260px;
+}
+
+.ex-groupby-row--EX {
+    display: flex;
+    gap: 6px;
+}
+
+.ex-groupby-row--EX select:first-child {
+    flex: 0 0 120px;
+}
+
+.ex-groupby-row--EX > :last-child {
+    flex: 1;
+}
+
+.ex-run--EX {
+    margin-left: auto;
+    padding: 7px 16px;
+    border-radius: 7px;
+    border: 1.5px solid rgba(255, 127, 50, 0.45);
+    background: rgba(255, 127, 50, 0.08);
+    color: #ffb74d;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.ex-run--EX:hover {
+    background: rgba(255, 127, 50, 0.18);
+}
+
+.ex-run--EX.stale {
+    background: #ff7f32;
+    color: #1e1e1e;
+    box-shadow: 0 0 12px rgba(255, 127, 50, 0.4);
+}
+
+.ex-run--EX:disabled {
+    opacity: 0.5;
+    cursor: wait;
+}
+
+.ex-panel-body--EX {
+    padding: 12px 16px 14px;
+    min-height: 70px;
+}
+
+.ex-panel-loading--EX {
+    display: flex;
+    justify-content: center;
+    padding: 40px;
+}
+
+.ex-result-loading--EX {
+    opacity: 0.45;
+    transition: opacity 0.2s ease;
+}
+
+.ex-panel-meta--EX {
+    margin-top: 8px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: rgba(255, 255, 255, 0.28);
+    text-align: right;
+}
+
+
+/* Result helpers */
+
+.ex-figures--EX {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.ex-figure--EX {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 12px;
+    border-radius: 9px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    min-width: 0;
+}
+
+.ex-figure--EX span {
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.9px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.38);
+}
+
+.ex-figure--EX b {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    white-space: nowrap;
+}
+
+.ex-figure--EX.good b { color: #69f0ae; }
+.ex-figure--EX.bad b { color: #ff8a80; }
+
+.ex-table-wrapper--EX {
+    overflow-x: auto;
+    margin: 6px 0;
+}
+
+.ex-table--EX {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.ex-table--EX th {
+    padding: 6px 10px;
+    text-align: right;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    color: rgba(255, 255, 255, 0.4);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    white-space: nowrap;
+}
+
+.ex-table--EX th code {
+    font-family: var(--font-mono);
+    color: #ffb74d;
+}
+
+.ex-table--EX td {
+    padding: 5px 10px;
+    text-align: right;
+    font-family: var(--font-mono);
+    color: rgba(255, 255, 255, 0.78);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.035);
+    white-space: nowrap;
+}
+
+.ex-table--EX th:first-child,
+.ex-table--EX td:first-child {
+    text-align: left;
+    font-family: 'Inter', 'Segoe UI', sans-serif;
+    color: rgba(255, 255, 255, 0.55);
+}
+
+.ex-table--EX td code {
+    font-family: var(--font-mono);
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.ex-table--EX td.good { color: #69f0ae; font-weight: 600; }
+.ex-table--EX td.strong { color: #ffb74d; font-weight: 600; }
+
+.ex-reading--EX {
+    margin-top: 10px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    background: rgba(255, 127, 50, 0.04);
+    border-left: 3px solid rgba(255, 127, 50, 0.4);
+    font-size: 12px;
+    line-height: 1.55;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.ex-reading--EX b {
+    display: block;
+    margin-bottom: 2px;
+    font-size: 9.5px;
+    letter-spacing: 1.1px;
+    text-transform: uppercase;
+    color: rgba(255, 183, 77, 0.75);
+}
+
+.ex-grid-2--EX {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 6px;
+    align-items: start;
+}
+
+.ex-feedback--EX {
+    position: fixed;
+    bottom: 26px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 4000;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-radius: 10px;
+    background: rgba(30, 30, 30, 0.96);
+    border: 1px solid rgba(255, 127, 50, 0.35);
+    color: #ffb74d;
+    font-size: 13px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    cursor: pointer;
+}
+
+.plot--P .modebar {
+    background: transparent !important;
+}
+
+.plot--P .modebar-btn path {
+    fill: rgba(255, 255, 255, 0.35) !important;
+}
+
+@media (max-width: 1500px) {
+    .ex-panels--EX,
+    .ex-grid-2--EX {
+        grid-template-columns: 1fr;
+    }
+    .ex-add-menu--EX {
+        width: 520px;
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 1000px) {
+    .explore--EX {
+        grid-template-columns: 1fr;
+    }
+    .ex-sidebar--EX {
+        position: static;
+        max-height: none;
+    }
+}
+
+.plot-error--P {
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: rgba(239, 83, 80, 0.08);
+    border: 1px solid rgba(239, 83, 80, 0.25);
+    color: #ff8a80;
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
