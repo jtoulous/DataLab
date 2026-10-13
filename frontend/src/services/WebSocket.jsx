@@ -42,6 +42,7 @@ function WebsocketManager() {
 
                     case 'datasets_list_update':
                         stateRef.current.setDatasetsList(data.payload.datasets_list);
+                        appEvents.emit('datasets', data.payload.datasets_list);
                         break;
 
                     case 'dataset_update':
@@ -50,6 +51,10 @@ function WebsocketManager() {
 
                     case 'columns_update':
                         appEvents.emit('columns', data.payload);
+                        break;
+
+                    case 'model_run_update':
+                        appEvents.emit('model_run', data.payload);
                         break;
                 }
             };

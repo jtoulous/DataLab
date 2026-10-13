@@ -45,7 +45,7 @@ function IntroAnimation({ onComplete }) {
         <div className={`intro-title--IA ${isAfterTitle ? 'visible' : ''}`}>
           <span className="intro-anomaly--IA">Data</span>
           <span className="intro-separator--IA" />
-          <span className="intro-sentinel--IA">Viz</span>
+          <span className="intro-sentinel--IA">Lab</span>
         </div>
 
         {/* ── Logo (materializes top-left during opening) ── */}

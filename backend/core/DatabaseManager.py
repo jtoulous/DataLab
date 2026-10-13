@@ -65,7 +65,39 @@ class DatabaseManager:
             )
         '''
 
-        self.execute_queries([query_1, query_2, query_3])
+        # Modelisation : un lancement (config + classement) et le detail de chaque modele a part
+        query_4 = '''
+            CREATE TABLE IF NOT EXISTS model_runs (
+                run_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                dataset_id TEXT,
+                name TEXT,
+                status TEXT,
+                config TEXT,
+                view TEXT,
+                info TEXT,
+                summary TEXT,
+                error TEXT,
+                created_at TEXT,
+                finished_at TEXT,
+                duration REAL
+            )
+        '''
+        query_5 = '''
+            CREATE TABLE IF NOT EXISTS model_results (
+                run_id INTEGER,
+                model_key TEXT,
+                result TEXT,
+                PRIMARY KEY (run_id, model_key)
+            )
+        '''
+
+        self.execute_queries([query_1, query_2, query_3, query_4, query_5])
+
+        # Sous-datasets : lien vers le dataset d'origine + comment il a ete decoupe (ajout a une base existante)
+        existing = {row[1] for row in self.execute_query(f'PRAGMA table_info({self.DATASETS_TBL})')}
+        for column in ('parent_id', 'origin', 'frozen'):
+            if column not in existing:
+                self.execute_queries([f'ALTER TABLE {self.DATASETS_TBL} ADD COLUMN {column} TEXT'])
 
 
 
@@ -133,8 +165,8 @@ class DatabaseManager:
     #####                                        Datasets                                        #####
 
     DATASET_COLUMNS = ['dataset_id', 'name', 'description', 'filename', 'file_size', 'read_report', 'type_overrides',
-                       'time_column', 'view_settings', 'profile', 'created_at', 'updated_at']
-    JSON_FIELDS = {'read_report', 'type_overrides', 'view_settings', 'profile'}
+                       'time_column', 'view_settings', 'profile', 'created_at', 'updated_at', 'parent_id', 'origin', 'frozen']
+    JSON_FIELDS = {'read_report', 'type_overrides', 'view_settings', 'profile', 'origin', 'frozen'}
 
     def _row_to_dataset(self, row, with_profile=True):
         record = dict(zip(self.DATASET_COLUMNS, row))
@@ -147,15 +179,20 @@ class DatabaseManager:
                 types[info['type']] = types.get(info['type'], 0) + 1
             record['summary'] = {'rows': profile['rows'], 'columns': len(profile['columns']), 'types': types, 'time': profile.get('time')}
             record['profile'] = None
+        record['frozen'] = record['frozen'] or {}
+        if not with_profile and record['origin']:
+            # la liste n'a besoin que du resume de l'origine (les bornes de morceaux peuvent etre nombreuses)
+            record['origin'] = {k: v for k, v in record['origin'].items() if k not in ('segments', 'inherited')}
         return record
 
-    def new_dataset(self, dataset_id, name, filename, file_size, read_report, profile):
+    def new_dataset(self, dataset_id, name, filename, file_size, read_report, profile,
+                    type_overrides=None, time_column='auto', parent_id=None, origin=None, description=''):
         now = self.now_utc()
         self.execute_queries([(
             f'''INSERT INTO {self.DATASETS_TBL} ({", ".join(self.DATASET_COLUMNS)})
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-            (dataset_id, name, '', filename, file_size, json.dumps(read_report), json.dumps({}), 'auto',
-             json.dumps({}), json.dumps(profile), now, now)
+                VALUES ({", ".join('?' * len(self.DATASET_COLUMNS))})''',
+            (dataset_id, name, description, filename, file_size, json.dumps(read_report), json.dumps(type_overrides or {}), time_column,
+             json.dumps({}), json.dumps(profile), now, now, parent_id, json.dumps(origin) if origin is not None else None, json.dumps({}))
         )])
 
     def get_datasets_list(self):
@@ -178,6 +215,8 @@ class DatabaseManager:
             (f'DELETE FROM {self.DATASETS_TBL} WHERE dataset_id = ?', (dataset_id,)),
             (f'DELETE FROM {self.COLUMNS_TBL} WHERE dataset_id = ?', (dataset_id,)),
             (f'DELETE FROM {self.WORKSPACES_TBL} WHERE dataset_id = ?', (dataset_id,)),
+            ('DELETE FROM model_results WHERE run_id IN (SELECT run_id FROM model_runs WHERE dataset_id = ?)', (dataset_id,)),
+            ('DELETE FROM model_runs WHERE dataset_id = ?', (dataset_id,)),
         ])
 
     #####                                                                                        #####
@@ -238,6 +277,75 @@ class DatabaseManager:
 
     def delete_workspace(self, dataset_id, name):
         self.execute_queries([(f'DELETE FROM {self.WORKSPACES_TBL} WHERE dataset_id = ? AND name = ?', (dataset_id, name))])
+
+    #####                                                                                        #####
+    ##################################################################################################
+    ##################################################################################################
+
+
+
+    ##################################################################################################
+    ##################################################################################################
+    #####                                       Model runs                                       #####
+
+    RUN_COLUMNS = ['run_id', 'dataset_id', 'name', 'status', 'config', 'view', 'info', 'summary', 'error', 'created_at', 'finished_at', 'duration']
+    RUN_JSON = {'config', 'view', 'info', 'summary'}
+
+    def _row_to_run(self, row):
+        run = dict(zip(self.RUN_COLUMNS, row))
+        for field in self.RUN_JSON:
+            run[field] = json.loads(run[field]) if run[field] else None
+        return run
+
+    def new_model_run(self, dataset_id, name, config, view):
+        connection = self.connect()
+        try:
+            cursor = connection.cursor()
+            cursor.execute(
+                'INSERT INTO model_runs (dataset_id, name, status, config, view, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+                (dataset_id, name, 'running', json.dumps(config), json.dumps(view), self.now_utc())
+            )
+            connection.commit()
+            return cursor.lastrowid
+        finally:
+            connection.close()
+
+    def rename_model_run(self, run_id, name):
+        self.execute_queries([('UPDATE model_runs SET name = ? WHERE run_id = ?', (name, run_id))])
+
+    def finish_model_run(self, run_id, status, info=None, summary=None, error=None, duration=None):
+        self.execute_queries([(
+            'UPDATE model_runs SET status = ?, info = ?, summary = ?, error = ?, finished_at = ?, duration = ? WHERE run_id = ?',
+            (status, json.dumps(info) if info is not None else None, json.dumps(summary) if summary is not None else None,
+             error, self.now_utc(), duration, run_id)
+        )])
+
+    def save_model_results(self, run_id, details):
+        self.execute_queries([
+            ('INSERT OR REPLACE INTO model_results (run_id, model_key, result) VALUES (?, ?, ?)', (run_id, key, json.dumps(result)))
+            for key, result in details.items()
+        ])
+
+    def get_model_runs(self, dataset_id):
+        rows = self.execute_query(f'SELECT {", ".join(self.RUN_COLUMNS)} FROM model_runs WHERE dataset_id = ? ORDER BY run_id DESC', (dataset_id,))
+        return [self._row_to_run(r) for r in rows]
+
+    def get_model_run(self, run_id):
+        rows = self.execute_query(f'SELECT {", ".join(self.RUN_COLUMNS)} FROM model_runs WHERE run_id = ?', (run_id,))
+        return self._row_to_run(rows[0]) if rows else None
+
+    def get_model_result(self, run_id, model_key):
+        rows = self.execute_query('SELECT result FROM model_results WHERE run_id = ? AND model_key = ?', (run_id, model_key))
+        return json.loads(rows[0][0]) if rows else None
+
+    def delete_model_run(self, run_id):
+        self.execute_queries([
+            ('DELETE FROM model_results WHERE run_id = ?', (run_id,)),
+            ('DELETE FROM model_runs WHERE run_id = ?', (run_id,)),
+        ])
+
+    def mark_interrupted_runs(self):
+        self.execute_queries([("UPDATE model_runs SET status = 'interrupted' WHERE status = 'running'",)])
 
     #####                                                                                        #####
     ##################################################################################################

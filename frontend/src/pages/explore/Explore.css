@@ -129,11 +129,11 @@
     margin-bottom: 8px;
     padding: 6px 10px;
     border-radius: 7px;
-    background: rgba(239, 83, 80, 0.07);
-    border: 1px solid rgba(239, 83, 80, 0.2);
+    background: rgba(255, 183, 77, 0.08);
+    border: 1px solid rgba(255, 183, 77, 0.25);
     font-size: 11px;
     font-weight: 600;
-    color: #ff8a80;
+    color: #ffb74d;
 }
 
 .ex-lookahead--EX.ok {
@@ -854,6 +854,42 @@
     fill: rgba(255, 255, 255, 0.35) !important;
 }
 
+.plot-wrap--P {
+    contain: layout style;
+}
+
+.plot-reset--P {
+    position: absolute;
+    top: 6px;
+    left: 6px;
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(19, 19, 23, 0.85);
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity .15s;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+}
+
+.plot-wrap--P:hover .plot-reset--P {
+    opacity: 1;
+}
+
+.plot-reset--P:hover {
+    background: rgba(255, 127, 50, 0.18);
+    border-color: rgba(255, 127, 50, 0.4);
+    color: #ff7f32;
+}
+
 @media (max-width: 1500px) {
     .ex-panels--EX,
     .ex-grid-2--EX {
@@ -883,4 +919,227 @@
     color: #ff8a80;
     font-family: var(--font-mono);
     font-size: 12px;
+}
+
+.ex-recipes--EX {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.22);
+    font-size: 11.5px;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.ex-recipes--EX input {
+    width: 90px;
+    padding: 4px 8px !important;
+}
+
+.ex-recipes--EX input[type="number"] {
+    width: 56px;
+}
+
+.ex-recipes--EX div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    width: 100%;
+}
+
+.ex-recipes--EX button {
+    padding: 4px 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 127, 50, 0.35);
+    background: rgba(255, 127, 50, 0.07);
+    color: #ffb74d;
+    font-size: 11.5px;
+    cursor: pointer;
+}
+
+.ex-recipes--EX button:hover {
+    background: rgba(255, 127, 50, 0.18);
+}
+
+
+.ex-inherited-badge--EX {
+    padding: 1px 8px;
+    border-radius: 10px;
+    border: 1px solid rgba(105, 240, 174, 0.45);
+    color: #69f0ae;
+    font-size: 10.5px;
+}
+
+.ex-column--EX.inherited b {
+    color: rgba(105, 240, 174, 0.85);
+}
+
+.ex-target-tag--EX {
+    margin-left: 6px;
+    padding: 0 6px;
+    border-radius: 8px;
+    background: rgba(255, 183, 77, 0.12);
+    color: #ffb74d;
+    font-style: normal;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.ex-recipes--EX .colinput--CI {
+    flex: 0 1 140px;
+}
+
+.ex-recipes--EX button.colinput-toggle--CI {
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: none;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.ex-recipes--EX .colinput-menu--CI button {
+    padding: 5px 8px;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 12px;
+}
+
+.ex-recipes--EX .colinput-menu--CI button.active {
+    background: rgba(255, 127, 50, 0.16);
+}
+
+/* ── Colonne issue d'un modele ── */
+.ex-mode--EX {
+    display: flex;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 10px;
+}
+
+.ex-mode--EX button {
+    flex: 1;
+    padding: 7px 8px;
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.ex-mode--EX button.active {
+    background: rgba(255, 127, 50, 0.16);
+    color: #ffb74d;
+}
+
+.ex-modelcol--EX {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.ex-modelcol--EX input,
+.ex-modelcol--EX select {
+    padding: 7px 10px;
+    border-radius: 7px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #141418;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 12.5px;
+    color-scheme: dark;
+    min-width: 0;
+}
+
+.ex-modelcol-row--EX {
+    display: flex;
+    gap: 8px;
+}
+
+.ex-modelcol-field--EX {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.ex-modelcol-field--EX.small {
+    flex: 0 0 80px;
+}
+
+.ex-modelcol-field--EX > span {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.38);
+}
+
+.ex-modelcol-info--EX {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.22);
+    font-size: 11.5px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.ex-modelcol-info--EX span {
+    margin-right: 6px;
+    color: rgba(255, 255, 255, 0.35);
+}
+
+.ex-modelcol-info--EX code {
+    font-family: var(--font-mono);
+    color: #ffb74d;
+    word-break: break-all;
+}
+
+.ex-modelcol-note--EX,
+.ex-modelcol-empty--EX {
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.ex-modelcol-empty--EX {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+}
+
+.ex-column--EX.model b {
+    color: #9085e9;
+}
+
+.ex-model-badge--EX {
+    padding: 1px 8px;
+    border-radius: 10px;
+    border: 1px solid rgba(144, 133, 233, 0.5);
+    color: #9085e9;
+    font-size: 10.5px;
+}
+
+.ex-modelcol-unsaved--EX {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.55);
+}
+
+.ex-modelcol-unsaved--EX div {
+    margin-top: 3px;
+    font-family: var(--font-mono);
+}
+
+.ex-modelcol-unsaved--EX span {
+    color: rgba(255, 255, 255, 0.35);
 }

@@ -97,6 +97,12 @@ export const apiRequests = {
 
     updateView: (dataset_id, view_settings) => post('/api/update_view', { dataset_id, view_settings }, "Invalid view settings"),
 
+    previewSubset: (dataset_id, spec) => post('/api/preview_subset', { dataset_id, spec }, "Selection error"),
+    createSubset: (dataset_id, name, spec, description = '') => post('/api/create_subset', { dataset_id, name, spec, description }, "Error creating subset"),
+    getSavedModels: (dataset_id) => fetch(`${BASE_URL}/api/model/saved?dataset_id=${encodeURIComponent(dataset_id)}`).then(res => handleResponse(res, "Error loading models")),
+    predictPreview: (dataset_id, run_id, model_key, output, threshold) => post('/api/model/predict_preview', { dataset_id, run_id, model_key, output, threshold }, "Prediction error"),
+    predictColumn: (dataset_id, fields) => post('/api/model/predict_column', { dataset_id, ...fields }, "Error creating the column"),
+    deleteFrozen: (dataset_id, name) => post('/api/delete_frozen', { dataset_id, name }, "Error deleting column"),
     deleteDataset: (dataset_id) => post('/api/delete_dataset', { dataset_id }, "Error deleting dataset"),
 
 
@@ -112,6 +118,38 @@ export const apiRequests = {
     /*====================    Analyses    ====================*/
 
     analyze: (dataset_id, analysis, params, view) => post('/api/analyze', { dataset_id, analysis, params, view }, "Analysis error"),
+
+
+    /*====================    Modeling    ====================*/
+
+    getModelCatalog: () => {
+        return fetch(`${BASE_URL}/api/model/catalog`)
+            .then((res) => handleResponse(res, "Error getting model catalog"));
+    },
+
+    modelPreview: (dataset_id, config, view) => post('/api/model/preview', { dataset_id, config, view }, "Invalid model setup"),
+
+    runModels: (dataset_id, config, view, name) => post('/api/model/run', { dataset_id, config, view, name }, "Error starting the run"),
+
+    cancelModelRun: (run_id) => post('/api/model/cancel', { run_id }, "Error cancelling the run"),
+
+    renameModelRun: (run_id, name) => post('/api/model/rename_run', { run_id, name }, "Error renaming the run"),
+    deleteModelRun: (run_id) => post('/api/model/delete_run', { run_id }, "Error deleting the run"),
+
+    getModelRuns: (dataset_id) => {
+        const url = new URL(`${BASE_URL}/api/model/runs`);
+        url.searchParams.append("dataset_id", dataset_id);
+        return fetch(url)
+            .then((res) => handleResponse(res, "Error getting model runs"));
+    },
+
+    getModelResult: (run_id, model_key) => {
+        const url = new URL(`${BASE_URL}/api/model/result`);
+        url.searchParams.append("run_id", run_id);
+        url.searchParams.append("model_key", model_key);
+        return fetch(url)
+            .then((res) => handleResponse(res, "Error getting model result"));
+    },
 
 
     /*====================    Workspaces    ====================*/

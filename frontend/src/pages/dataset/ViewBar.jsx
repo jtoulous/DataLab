@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { apiRequests } from '../../services/api_requests.js';
 import { formatCount } from '../../services/format.js';
+import { ColumnInput } from '../../components/ColumnInput.jsx';
 
 
 const RESAMPLE_RULES = [
@@ -81,8 +82,8 @@ function ViewBar({ dataset, onSaved }) {
 
                     <div className="viewbar-group--DS viewbar-filter--DS">
                         <span>Row filter (formula, true = kept)</span>
-                        <input className="mono--DS" list="dv-columns-list" value={draft.filter || ''} placeholder={`e.g. (status == "OK") & (value > 0)`}
-                            onChange={(e) => set({ filter: e.target.value })} />
+                        <ColumnInput value={draft.filter || ''} placeholder={`e.g. (status == "OK") & (value > 0)`}
+                            onChange={(filter) => set({ filter })} />
                     </div>
 
                     <div className="viewbar-actions--DS">

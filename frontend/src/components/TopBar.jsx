@@ -27,7 +27,7 @@ function TopBar() {
           <a href="/" className="top-bar-link">
             <span className="title-anomaly">Data</span>
             <span className="title-separator"></span>
-            <span className="title-sentinel">Viz</span>
+            <span className="title-sentinel">Lab</span>
           </a>
         </h1>
 

@@ -32,9 +32,14 @@ export function formatDate(value, withTime = true) {
     if (value === null || value === undefined) return '—';
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return String(value);
-    const date = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+    const date = `${pad(d.getUTCDate())}-${pad(d.getUTCMonth() + 1)}-${d.getUTCFullYear()}`;
     if (!withTime || (d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0)) return date;
     return `${date} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}${d.getUTCSeconds() ? `:${pad(d.getUTCSeconds())}` : ''}`;
+}
+
+// Le backend renvoie les dates en 'YYYY-MM-DD HH:MM:SS' UTC naif (non ISO)
+export function parseUtc(str) {
+    return str ? new Date(str.replace(' ', 'T') + 'Z').getTime() : null;
 }
 
 export function formatCell(value) {

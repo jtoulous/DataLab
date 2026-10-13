@@ -4,11 +4,14 @@ import { GlobalState } from '../State.jsx';
 import { apiRequests } from '../services/api_requests.js';
 import { appEvents } from '../services/events.js';
 import { formatCount, formatDate } from '../services/format.js';
+import { ColumnsContext } from '../components/columnsContext.js';
 import { BackArrow, AppLoader, GearIcon, CloseIcon } from '../components/Utils.jsx';
 
 import OverviewTab from './dataset/OverviewTab.jsx';
 import DataTab from './dataset/DataTab.jsx';
 import ExploreTab from './explore/ExploreTab.jsx';
+import ModelingTab from './modeling/ModelingTab.jsx';
+import SubsetModal from './dataset/SubsetModal.jsx';
 
 import "../components/SettingsModal.css";
 import "./Dataset.css"
@@ -84,7 +87,7 @@ function DatasetSettingsModal({ dataset, onClose, onChanged }) {
                             <div className="setting-row">
                                 <div className="setting-info">
                                     <span className="setting-label">Delete dataset</span>
-                                    <span className="setting-description">Removes the file, its derived columns and its workspaces.</span>
+                                    <span className="setting-description">Removes the file, its derived columns, workspaces and model runs. Its subsets are kept (independent copies).</span>
                                 </div>
                                 <button type="button" className={`danger-button--DS ${confirmDelete ? 'confirm' : ''}`} onClick={remove} onMouseLeave={() => setConfirmDelete(false)}>
                                     {confirmDelete ? 'Click to confirm' : 'Delete'}
@@ -100,15 +103,54 @@ function DatasetSettingsModal({ dataset, onClose, onChanged }) {
 }
 
 
+// Titre = selecteur de dataset : l'original et tous ses sous-datasets (on garde l'onglet courant)
+function DatasetSwitcher({ dataset }) {
+    const navigate = useNavigate();
+    const [open, setOpen] = useState(false);
+    const family = dataset.family || [];
+    const origin = dataset.origin;
+
+    useEffect(() => {
+        if (!open) return;
+        const close = (e) => { if (!e.target.closest('.dataset-switcher--DS')) setOpen(false); };
+        document.addEventListener('mousedown', close);
+        return () => document.removeEventListener('mousedown', close);
+    }, [open]);
+
+    return (
+        <div className="dataset-switcher--DS">
+            <button type="button" className={`dataset-title--DS ${family.length > 1 ? 'switchable' : ''}`} onClick={() => family.length > 1 && setOpen(o => !o)}>
+                <span>{dataset.name}{family.length > 1 && <i>▾</i>}</span>
+                {origin
+                    ? <em className="origin">⤷ subset of {origin.parent_name} · {formatCount(origin.rows)} / {formatCount(origin.parent_rows)} rows{origin.pieces > 1 ? ` · ${origin.pieces} pieces` : ''}</em>
+                    : <em>{dataset.filename}{family.length > 1 ? ` · ${family.length - 1} subset${family.length > 2 ? 's' : ''}` : ''}</em>}
+            </button>
+            {open && (
+                <div className="dataset-switcher-menu--DS">
+                    {family.map(f => (
+                        <button type="button" key={f.dataset_id} className={f.dataset_id === dataset.dataset_id ? 'current' : ''} style={{ paddingLeft: 12 + f.depth * 18 }}
+                            onClick={() => { setOpen(false); if (f.dataset_id !== dataset.dataset_id) navigate(`/dataset?id=${f.dataset_id}`); }}>
+                            <span className="name">{f.depth > 0 && <b>⤷</b>}{f.name}</span>
+                            <span className="meta">{formatCount(f.rows)} rows{f.origin?.pieces > 1 ? ` · ${f.origin.pieces} pieces` : ''}</span>
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+
 function Dataset() {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
-    const { currentTab, setCurrentTab, setCurrentDataset, headerCollapsed, meta } = GlobalState();
+    const { currentTab, setCurrentTab, setCurrentDataset, headerCollapsed } = GlobalState();
 
     const datasetId = searchParams.get('id');
     const [dataset, setDataset] = useState(null);
     const [error, setError] = useState(null);
     const [showSettings, setShowSettings] = useState(false);
+    const [showSubset, setShowSubset] = useState(false);
 
     const load = useCallback(() => {
         apiRequests.getDataset(datasetId)
@@ -126,6 +168,11 @@ function Dataset() {
         if (payload.dataset_id === datasetId) setDataset(d => (d ? { ...d, derived_columns: payload.columns } : d));
     }), [datasetId]);
 
+    // un sous-dataset cree / supprime ailleurs : on rafraichit la famille du selecteur
+    useEffect(() => appEvents.on('datasets', () => {
+        apiRequests.getDataset(datasetId).then(record => setDataset(d => (d ? { ...d, family: record.family } : d))).catch(() => {});
+    }), [datasetId]);
+
     const catalog = useMemo(() => buildCatalog(dataset), [dataset]);
 
     if (error) {
@@ -140,25 +187,19 @@ function Dataset() {
         { key: 'overview', label: 'Overview' },
         { key: 'data', label: 'Data' },
         { key: 'explore', label: 'Explore' },
+        { key: 'modeling', label: 'Modelling' },
     ];
 
     return (
+        <ColumnsContext.Provider value={catalog}>
         <div className="dataset-page-container--DS">
-            {/* autocompletion partagee par tous les champs colonne / formule */}
-            <datalist id="dv-columns-list">
-                {catalog.all.map(c => <option key={c} value={c} />)}
-                {meta && Object.keys(meta.functions).flatMap(f => f.split(' / ').map(x => x.trim())).map(f => <option key={f} value={f} />)}
-            </datalist>
             <BackArrow onClick={() => navigate('/')} />
             <div className="dataset-top-container--DS" style={{
                 visibility: headerCollapsed ? 'hidden' : 'visible',
                 opacity: headerCollapsed ? 0 : 1,
                 animation: headerCollapsed ? 'slideUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s forwards' : 'slideDown 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s backwards'
             }}>
-                <div className="dataset-title--DS">
-                    <span>{dataset.name}</span>
-                    <em>{dataset.filename}</em>
-                </div>
+                <DatasetSwitcher dataset={dataset} />
                 <div className="dataset-head-stats--DS">
                     <div><span>Rows</span>{formatCount(p.rows)}</div>
                     <div><span>Columns</span>{p.order.length}</div>
@@ -166,6 +207,7 @@ function Dataset() {
                     <div><span>Time axis</span>{p.time ? `${p.time.column} · ${p.time.step_label || '?'}` : 'none'}</div>
                     {p.time && <div><span>Range</span>{formatDate(p.time.start, false)} → {formatDate(p.time.end, false)}</div>}
                 </div>
+                <button type="button" className="subset-btn--DS" onClick={() => setShowSubset(true)} title="Create a new dataset from periods of this one">+ Subset</button>
                 <button className="settings-btn" onClick={() => setShowSettings(true)}><GearIcon size={22} /></button>
             </div>
 
@@ -184,10 +226,13 @@ function Dataset() {
                 {currentTab === 'overview' && <OverviewTab dataset={dataset} onChanged={setDataset} />}
                 {currentTab === 'data' && <DataTab dataset={dataset} catalog={catalog} onChanged={setDataset} />}
                 {currentTab === 'explore' && <ExploreTab dataset={dataset} catalog={catalog} onChanged={setDataset} />}
+                {currentTab === 'modeling' && <ModelingTab dataset={dataset} catalog={catalog} onChanged={setDataset} />}
             </div>
 
+            {showSubset && <SubsetModal dataset={dataset} catalog={catalog} onClose={() => setShowSubset(false)} />}
             {showSettings && <DatasetSettingsModal dataset={dataset} onClose={() => setShowSettings(false)} onChanged={(record) => { setDataset(record); load(); }} />}
         </div>
+        </ColumnsContext.Provider>
     );
 }
 

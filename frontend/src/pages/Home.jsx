@@ -2,7 +2,7 @@ import React, { useState } from "react"
 import { useNavigate } from "react-router-dom"; 
 import { GlobalState } from '../State.jsx';
 import { apiRequests } from '../services/api_requests.js';
-import { formatCount, formatBytes, formatDate, COLUMN_TYPE_STYLE } from '../services/format.js';
+import { formatCount, formatBytes, formatDate, parseUtc, COLUMN_TYPE_STYLE } from '../services/format.js';
 
 import { FileDropZone } from '../components/FileDropZone.jsx';
 import { AppLoader, TrashIcon } from '../components/Utils.jsx';
@@ -18,6 +18,10 @@ function Home() {
     const [serverPath, setServerPath] = useState('');
     const [showPathForm, setShowPathForm] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(null);
+
+    // seuls les datasets d'origine sont listes ; leurs sous-datasets se choisissent depuis la page du dataset
+    const roots = datasetsList.filter(d => !d.parent_id);
+    const subsetCount = (id) => datasetsList.filter(d => d.parent_id === id).length;
 
     const accept = meta ? meta.extensions.map(e => `.${e}`).join(',') : '.csv';
 
@@ -112,12 +116,12 @@ function Home() {
             </div>
 
             <div className="datasets-grid--H">
-                {datasetsList.length === 0 && (
+                {roots.length === 0 && (
                     <div className="empty-state datasets-empty--H">
                         <p>No dataset yet — drop a file above to start exploring.</p>
                     </div>
                 )}
-                {datasetsList.map(d => {
+                {roots.map(d => {
                     const s = d.summary || {};
                     return (
                         <div key={d.dataset_id} className="dataset-card--H" onClick={() => navigate(`/dataset?id=${d.dataset_id}`)}>
@@ -146,7 +150,8 @@ function Home() {
                                     return <span key={type} style={{ color: style.color, borderColor: style.color }}>{style.icon} {n} {style.label}</span>;
                                 })}
                             </div>
-                            <span className="dataset-date--H">updated {d.updated_at?.slice(0, 16)} UTC</span>
+                            {subsetCount(d.dataset_id) > 0 && <span className="dataset-subsets--H">⤷ {subsetCount(d.dataset_id)} subset{subsetCount(d.dataset_id) > 1 ? 's' : ''}</span>}
+                            <span className="dataset-date--H">updated {formatDate(parseUtc(d.updated_at))} UTC</span>
                         </div>
                     );
                 })}

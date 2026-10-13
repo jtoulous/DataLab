@@ -7,7 +7,7 @@ import "./Utils.css";
 // Logo : histogramme + points (donnees), duo blanc / orange
 const BrandMark = ({ size = 40, className = "" }) => {
     return (
-        <svg className={`brand-mark--UT ${className}`} width={size} height={size} viewBox="0 0 32 32" fill="none" aria-label="DataViz">
+        <svg className={`brand-mark--UT ${className}`} width={size} height={size} viewBox="0 0 32 32" fill="none" aria-label="Data Lab">
             <rect x="4" y="17" width="6" height="11" rx="1.3" fill="rgba(255,255,255,0.85)" />
             <rect x="13" y="10" width="6" height="18" rx="1.3" fill="#ff7f32" />
             <rect x="22" y="5" width="6" height="23" rx="1.3" fill="#ffb74d" />
@@ -37,7 +37,7 @@ function AppLoader({ size = 'md', label }) {
                 <span className="app-loader-mark--UT">
                     <span className="app-loader-letter--UT app-loader-a--UT">D</span>
                     <span className="app-loader-sep--UT" />
-                    <span className="app-loader-letter--UT app-loader-s--UT">V</span>
+                    <span className="app-loader-letter--UT app-loader-s--UT">L</span>
                 </span>
             </div>
             {label && <span className="app-loader-label--UT">{label}</span>}

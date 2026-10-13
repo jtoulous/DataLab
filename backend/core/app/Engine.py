@@ -50,7 +50,7 @@ FUNCTIONS_DOC = {
 }
 
 LOOKAHEAD_FUNCTIONS = {'lead'}
-MAX_POINTS = 15000
+MAX_POINTS = 100000
 
 
 class FormulaError(Exception):
@@ -79,10 +79,11 @@ class FormulaEvaluator:
                      ast.Load, ast.Add, ast.Sub, ast.Mult, ast.Div, ast.Pow, ast.Mod, ast.FloorDiv, ast.USub, ast.UAdd,
                      ast.Gt, ast.GtE, ast.Lt, ast.LtE, ast.Eq, ast.NotEq, ast.BitAnd, ast.BitOr, ast.Invert)
 
-    def __init__(self, df, custom, time_index, depth=0, cache=None):
+    def __init__(self, df, custom, time_index, depth=0, cache=None, lookahead_columns=()):
         self.df = df
         self.custom = custom
         self.time_index = time_index
+        self.lookahead_columns = lookahead_columns
         self.depth = depth
         self.lookahead = False
         self.cache = cache if cache is not None else {}
@@ -278,11 +279,14 @@ class FormulaEvaluator:
 
     def _column(self, name):
         if name in self.df.columns:
+            # colonne heritee d'un dataset parent, calculee la-bas avec lead() : elle reste une cible
+            if name in self.lookahead_columns:
+                self.lookahead = True
             return self.df[name]
         if name in self.custom:
             if self.depth > 25:
                 raise FormulaError(f'Column {name}: too deep (circular reference?)')
-            nested = FormulaEvaluator(self.df, self.custom, self.time_index, self.depth + 1, self.cache)
+            nested = FormulaEvaluator(self.df, self.custom, self.time_index, self.depth + 1, self.cache, self.lookahead_columns)
             value = nested.evaluate(self.custom[name])
             self.lookahead = self.lookahead or nested.lookahead
             return value
@@ -297,12 +301,19 @@ class View:
     """
     Un dataset tel qu'analyse : df type -> plage -> reechantillonnage -> colonnes derivees -> filtre.
     `settings` : {range: {start, end}, resample: {rule, agg}, filter: formule booleenne}
+
+    Sous-dataset fait de plusieurs morceaux (periodes disjointes du parent) : `segment_starts` donne le
+    debut de chaque morceau (ms pour un axe temporel, numero de ligne sinon). Les formules sont alors
+    evaluees morceau par morceau : lead / lag / fenetres glissantes ne traversent jamais un raccord.
+    `inherited` : colonnes figees heritees du parent ({nom: {lookahead, horizon, ...}}).
     """
 
-    def __init__(self, df, profile, custom, settings):
+    def __init__(self, df, profile, custom, settings, inherited=None, segment_starts=None):
         self.profile = profile
         self.custom = custom or {}
         self.settings = settings or {}
+        self.inherited = inherited or {}
+        self.lookahead_columns = frozenset(n for n, i in self.inherited.items() if i.get('lookahead'))
         self.time_index = isinstance(df.index, pd.DatetimeIndex)
 
         df = df.drop(columns=[c for c, i in profile['columns'].items() if i.get('type') == 'ignore' and c in df.columns])
@@ -311,11 +322,40 @@ class View:
         self.df = df
         self.cache = {}
         self.mask = None
+        self.slices = self._segment_slices(segment_starts)
+        self.slice_caches = [{} for _ in self.slices or []]
 
         filter_formula = (self.settings.get('filter') or '').strip()
         if filter_formula:
-            mask = self.evaluator().evaluate(filter_formula)
+            mask, _ = self._evaluate(filter_formula)
             self.mask = mask.fillna(0).astype(bool)
+
+    def _segment_slices(self, starts):
+        """Positions [debut, fin) de chaque morceau dans le df courant, ou None si un seul morceau."""
+        if not starts or not len(self.df):
+            return None
+        if self.time_index:
+            keys = self.df.index.as_unit('ms').asi8
+        else:
+            keys = np.asarray(self.df.index, dtype=np.int64)
+        piece = np.searchsorted(np.asarray(starts, dtype=np.int64), keys, side='right')
+        cuts = np.flatnonzero(np.diff(piece)) + 1
+        if not len(cuts):
+            return None
+        bounds = [0, *cuts.tolist(), len(keys)]
+        return list(zip(bounds[:-1], bounds[1:]))
+
+    def _evaluate(self, formula):
+        """Formule sur tout le df (non filtre) -> (serie, lookahead), morceau par morceau si besoin."""
+        if not self.slices:
+            ev = self.evaluator()
+            return ev.evaluate(formula), ev.lookahead
+        parts, lookahead = [], False
+        for (a, b), cache in zip(self.slices, self.slice_caches):
+            ev = FormulaEvaluator(self.df.iloc[a:b], self.custom, self.time_index, cache=cache, lookahead_columns=self.lookahead_columns)
+            parts.append(ev.evaluate(formula))
+            lookahead = lookahead or ev.lookahead
+        return pd.concat(parts), lookahead
 
     def _apply_range(self, df):
         r = self.settings.get('range') or {}
@@ -358,17 +398,16 @@ class View:
         return out.dropna(how='all', subset=[c for c in out.columns if c != 'n_rows'])
 
     def evaluator(self):
-        return FormulaEvaluator(self.df, self.custom, self.time_index, cache=self.cache)
+        return FormulaEvaluator(self.df, self.custom, self.time_index, cache=self.cache, lookahead_columns=self.lookahead_columns)
 
     def column(self, formula, numeric=True):
         """Evalue une formule ; renvoie (serie filtree, lookahead)."""
-        ev = self.evaluator()
-        values = ev.evaluate(formula)
+        values, lookahead = self._evaluate(formula)
         if numeric and not pd.api.types.is_numeric_dtype(values):
             raise FormulaError(f'"{formula}" is not numeric — use code({formula}) or pick a numeric column')
         if self.mask is not None:
             values = values[self.mask]
-        return values, ev.lookahead
+        return values, lookahead
 
     def frame(self, formulas, numeric=True):
         out, lookahead = {}, []
@@ -409,7 +448,9 @@ class View:
             out.index = df.index
         view = View.__new__(View)
         view.profile, view.custom, view.settings = self.profile, self.custom, self.settings
+        view.inherited, view.lookahead_columns = self.inherited, self.lookahead_columns
         view.time_index, view.df, view.cache, view.mask = self.time_index, out, {}, None
+        view.slices, view.slice_caches = None, []
         return view
 
 
@@ -460,6 +501,7 @@ def _table(view, p):
 
 def _series(view, p):
     frame, lookahead = view.frame(p.get('columns') or view.numeric_columns()[:3])
+    comparison = _compare_curves(frame, p.get('reference'), p.get('compare_on', 'values')) if frame.shape[1] >= 2 else None
     x_formula = p.get('x')
     if x_formula:
         x, _ = view.column(x_formula, numeric=False)
@@ -473,8 +515,34 @@ def _series(view, p):
         'x': [_json(v) for v in x_values],
         'x_kind': 'time' if (not x_formula and view.time_index) or pd.api.types.is_datetime64_any_dtype(x_values) else 'number',
         'columns': {c: _clean_list(frame[c]) for c in frame.columns},
-        'lookahead': lookahead, 'downsampled': step > 1,
+        'lookahead': lookahead, 'downsampled': step > 1, 'rows': int(len(frame) * step), 'comparison': comparison,
     }
+
+
+def _compare_curves(frame, reference, on='values'):
+    """
+    Chaque courbe comparee a la courbe de reference ("reel"), sur toutes les lignes (pas seulement les
+    points traces) ou les deux valent quelque chose. on='changes' : sur les variations ligne a ligne, ce qui
+    evite le R2 trompeur de deux series de niveau qui se ressemblent simplement parce qu'elles persistent.
+    """
+    from .Modeling import regression_metrics
+    columns = list(frame.columns)
+    reference = reference if reference in columns else columns[0]
+    data = frame.astype(float)
+    if on == 'changes':
+        data = data.diff()
+    out = {'reference': reference, 'on': 'changes' if on == 'changes' else 'values', 'rows': []}
+    for column in columns:
+        if column == reference:
+            continue
+        pair = pd.concat([data[reference], data[column]], axis=1, keys=['real', 'other']).dropna()
+        row = {'column': column, 'n': int(len(pair))}
+        if len(pair) >= 2:
+            real, other = pair['real'].to_numpy(), pair['other'].to_numpy()
+            row.update(regression_metrics(real, other))
+            row['bias'] = _clean(float(np.mean(other - real)))
+        out['rows'].append(row)
+    return out
 
 
 def _stats(view, p):

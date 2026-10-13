@@ -1,0 +1,272 @@
+.settings-modal.subset-modal--SB {
+    width: min(1180px, 94vw);
+    max-height: 92vh;
+}
+
+.subset-of--SB {
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.subset-body--SB {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 18px 28px 24px;
+}
+
+.subset-plot-bar--SB {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.subset-column--SB {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 280px;
+}
+
+.subset-column--SB > span,
+.subset-section--SB h4 {
+    margin: 0;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.subset-section--SB h4 em {
+    font-style: normal;
+    text-transform: none;
+    letter-spacing: 0;
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.subset-column--SB input,
+.subset-section--SB .colinput--CI input,
+.subset-input--SB,
+.subset-range--SB input {
+    padding: 7px 10px;
+    border-radius: 7px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #141418;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 12.5px;
+    color-scheme: dark;
+    min-width: 0;
+}
+
+.subset-input--SB:focus,
+.subset-range--SB input:focus {
+    outline: none;
+    border-color: rgba(255, 127, 50, 0.6);
+}
+
+.subset-toggle--SB {
+    display: flex;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.subset-toggle--SB button {
+    padding: 7px 14px;
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.subset-toggle--SB.small button {
+    padding: 4px 10px;
+    font-size: 11px;
+}
+
+.subset-toggle--SB button.active {
+    background: rgba(255, 127, 50, 0.16);
+    color: #ffb74d;
+}
+
+.subset-toggle--SB button.active.keep {
+    background: rgba(38, 166, 154, 0.18);
+    color: #6fd3c8;
+}
+
+.subset-toggle--SB button.active.drop {
+    background: rgba(239, 83, 80, 0.16);
+    color: #ff8a80;
+}
+
+.subset-plot--SB {
+    min-height: 300px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.18);
+}
+
+.subset-loading--SB {
+    height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.subset-hint--SB,
+.subset-note--SB {
+    margin: 0;
+    font-size: 11.5px;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.subset-grid--SB {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 22px;
+}
+
+.subset-section--SB {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.subset-section-head--SB {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.subset-empty--SB {
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.subset-range--SB {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border-radius: 8px;
+    border-left: 3px solid rgba(38, 166, 154, 0.7);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.subset-range--SB.drop {
+    border-left-color: rgba(239, 83, 80, 0.7);
+}
+
+.subset-range--SB b {
+    width: 16px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.subset-range--SB input {
+    flex: 1 1 0;
+    font-family: var(--font-mono);
+}
+
+.subset-range--SB span {
+    color: rgba(255, 255, 255, 0.35);
+}
+
+.subset-range--SB button,
+.subset-add--SB {
+    border: none;
+    background: none;
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+}
+
+.subset-range--SB button:hover {
+    color: #ff8a80;
+}
+
+.subset-add--SB {
+    align-self: flex-start;
+    padding: 4px 0;
+    font-size: 12px;
+    color: rgba(255, 183, 77, 0.8);
+}
+
+.subset-add--SB:hover {
+    color: #ff7f32;
+}
+
+.subset-preview--SB {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-top: 4px;
+    padding: 10px 12px;
+    border-radius: 9px;
+    background: rgba(0, 0, 0, 0.25);
+    font-size: 12.5px;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.subset-preview--SB b {
+    font-family: var(--font-mono);
+    color: #fff;
+}
+
+.subset-preview--SB .muted {
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.subset-preview--SB .error {
+    color: #ff8a80;
+}
+
+.subset-preview--SB .note {
+    font-size: 11.5px;
+    color: #8ab8f0;
+}
+
+.subset-preview--SB .warn {
+    font-size: 11.5px;
+    color: #ffb74d;
+}
+
+.subset-inherited--SB {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 11.5px;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.subset-inherited--SB b {
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.subset-inherited--SB span {
+    font-family: var(--font-mono);
+    color: #69f0ae;
+}
+
+.subset-actions--SB {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+@media (max-width: 900px) {
+    .subset-grid--SB {
+        grid-template-columns: 1fr;
+    }
+}
+
+.subset-range--SB input.bad {
+    border-color: rgba(239, 83, 80, 0.7);
+}

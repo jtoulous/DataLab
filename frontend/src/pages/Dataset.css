@@ -952,3 +952,116 @@
 .data-grid--DT th.data-rownum--DT {
     z-index: 3;
 }
+
+/*===========================================================*/
+/*                 Dataset switcher / subsets                */
+/*===========================================================*/
+
+.dataset-switcher--DS {
+    position: relative;
+    min-width: 0;
+}
+
+button.dataset-title--DS {
+    padding: 4px 8px;
+    margin-left: -8px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    background: none;
+    text-align: left;
+    cursor: default;
+    max-width: 420px;
+}
+
+button.dataset-title--DS.switchable {
+    cursor: pointer;
+}
+
+button.dataset-title--DS.switchable:hover {
+    border-color: rgba(255, 127, 50, 0.3);
+    background: rgba(255, 127, 50, 0.06);
+}
+
+.dataset-title--DS span i {
+    margin-left: 8px;
+    font-style: normal;
+    font-size: 12px;
+    color: rgba(255, 127, 50, 0.8);
+}
+
+.dataset-title--DS em.origin {
+    color: #69f0ae;
+    opacity: 0.75;
+}
+
+.dataset-switcher-menu--DS {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: -8px;
+    min-width: 320px;
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 5px;
+    border-radius: 11px;
+    background: #1b1b21;
+    border: 1px solid rgba(255, 127, 50, 0.3);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+    z-index: 50;
+}
+
+.dataset-switcher-menu--DS button {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 18px;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 7px;
+    background: none;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 13px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.dataset-switcher-menu--DS button:hover {
+    background: rgba(255, 127, 50, 0.12);
+}
+
+.dataset-switcher-menu--DS button.current {
+    background: rgba(255, 127, 50, 0.18);
+    color: #ffb74d;
+}
+
+.dataset-switcher-menu--DS .name b {
+    margin-right: 6px;
+    font-weight: 400;
+    color: #69f0ae;
+}
+
+.dataset-switcher-menu--DS .meta {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+    white-space: nowrap;
+}
+
+.subset-btn--DS {
+    position: absolute;
+    right: 76px;
+    padding: 8px 16px;
+    border-radius: 9px;
+    border: 1px solid rgba(105, 240, 174, 0.35);
+    background: rgba(105, 240, 174, 0.06);
+    color: #69f0ae;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.subset-btn--DS:hover {
+    background: rgba(105, 240, 174, 0.14);
+    border-color: rgba(105, 240, 174, 0.6);
+}

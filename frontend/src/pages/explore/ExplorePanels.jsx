@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import React, { useState } from "react";
 import Plot from '../../components/Plot.jsx';
+import { ColumnInput } from '../../components/ColumnInput.jsx';
 import { PLOT_COLORS, DIVERGING, SEQUENTIAL } from '../../components/plotTheme.js';
 import { formatNumber, formatCount, formatPct, formatDate } from '../../services/format.js';
 
@@ -9,11 +10,11 @@ import { formatNumber, formatCount, formatPct, formatDate } from '../../services
 /*                                  Shared inputs                                      */
 /*=====================================================================================*/
 
-export function FormulaInput({ value, onChange, placeholder = 'column or formula', label, wide }) {
+export function FormulaInput({ value, onChange, placeholder = 'column or formula', label, wide, single }) {
     return (
         <label className={`ex-field--EX ${wide ? 'wide' : ''}`}>
             {label && <span>{label}</span>}
-            <input className="mono--DS" list="dv-columns-list" value={value || ''} placeholder={placeholder} spellCheck={false} onChange={(e) => onChange(e.target.value)} />
+            <ColumnInput value={value || ''} placeholder={placeholder} onChange={onChange} single={single} />
         </label>
     );
 }
@@ -32,8 +33,9 @@ export function MultiInput({ values, onChange, label, max = 10 }) {
                 {values.map(v => (
                     <span key={v} className="ex-chip--EX"><code>{v}</code><button type="button" onClick={() => onChange(values.filter(x => x !== v))}>✕</button></span>
                 ))}
-                <input className="mono--DS" list="dv-columns-list" value={draft} placeholder={values.length < max ? '+ column / formula (Enter)' : `max ${max}`} spellCheck={false}
-                    onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} onBlur={add} />
+                <ColumnInput value={draft} placeholder={values.length < max ? '+ pick a column or type a formula (Enter)' : `max ${max}`}
+                    onChange={setDraft} onPick={(name) => { if (!values.includes(name) && values.length < max) onChange([...values, name]); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} onBlur={add} />
             </div>
         </div>
     );
@@ -84,7 +86,7 @@ function GroupByInput({ label, value, rule, onChange, catalog }) {
                         {['1h', '4h', '1D', '1W', '1M', '1Q', '1Y'].map(r => <option key={r} value={r}>{r}</option>)}
                     </select>
                 ) : (
-                    <input className="mono--DS" list="dv-columns-list" value={value || ''} spellCheck={false} onChange={(e) => onChange({ by: e.target.value })} />
+                    <ColumnInput value={value || ''} onChange={(by) => onChange({ by })} />
                 )}
             </div>
         </div>
@@ -115,9 +117,43 @@ function Figures({ items }) {
     );
 }
 
+function DownsampleNote({ result }) {
+    if (!result.downsampled) return null;
+    return <div className="ex-lookahead--EX ok">Only 1 row out of {Math.round(result.rows / result.x.length)} is drawn (too many rows): shifts like lead(x, 6) look shorter than they are. Restrict the range in the View bar to see every row.</div>;
+}
+
 function LookaheadNote({ columns }) {
     if (!columns?.length) return null;
     return <div className="ex-lookahead--EX">LOOKAHEAD — {columns.join(', ')} uses following rows (lead): fine as a target to explain, never as an input.</div>;
+}
+
+const COMPARE_COLUMNS = [
+    ['r2', 'R²', v => fmt(v, 4)], ['mae', 'MAE', fmt], ['rmse', 'RMSE', fmt], ['nrmse', 'NRMSE', v => fmt(v, 4)],
+    ['bias', 'Bias', fmt], ['pearson', 'Corr', v => fmt(v, 3)], ['spearman', 'Rank corr', v => fmt(v, 3)],
+    ['sign_accuracy', 'Same sign', v => formatPct(v)], ['n', 'Rows', formatCount],
+];
+
+// Metriques de chaque courbe comparee a la courbe de reference (le "reel")
+function ComparisonTable({ comparison }) {
+    if (!comparison?.rows?.length) return null;
+    return (
+        <>
+            <div className="ex-table-wrapper--EX">
+                <table className="ex-table--EX">
+                    <thead><tr><th>vs <code>{comparison.reference}</code> ({comparison.on === 'changes' ? 'row-to-row changes' : 'values'})</th>{COMPARE_COLUMNS.map(([k, label]) => <th key={k}>{label}</th>)}</tr></thead>
+                    <tbody>{comparison.rows.map(r => (
+                        <tr key={r.column}><td><code>{r.column}</code></td>{COMPARE_COLUMNS.map(([k, , f]) => <td key={k}>{r[k] === null || r[k] === undefined ? '—' : f(r[k])}</td>)}</tr>
+                    ))}</tbody>
+                </table>
+            </div>
+            <Reading>
+                The reference curve plays the "real" role, each other curve the "prediction". {comparison.on === 'values'
+                    ? 'Two level series (prices…) almost always look alike on values (R² close to 1) just because they persist — switch to "row-to-row changes" for an honest comparison.'
+                    : 'Computed on the change from one row to the next, which removes the level: this is the fair test of whether the curve follows the movements.'}
+                {' '}Bias = mean(curve − reference). NRMSE = RMSE / range of the reference.
+            </Reading>
+        </>
+    );
 }
 
 const STAT_ROWS = [
@@ -162,13 +198,19 @@ export const PANEL_TYPES = {
     series: {
         label: 'Line chart', icon: '〰', group: 'Explore',
         description: 'Columns plotted along the time axis (or any X), stacked or overlaid.',
-        defaults: (c) => ({ columns: c.numeric.slice(0, 2), x: '', mode: 'stack', log: false }),
+        defaults: (c) => ({ columns: c.numeric.slice(0, 2), x: '', mode: 'stack', log: false, reference: '', compare_on: 'values' }),
         Params: ({ params, set }) => (
             <>
                 <MultiInput label="Y columns" values={params.columns} onChange={(columns) => set({ columns })} />
                 <FormulaInput label="X (empty = time axis / row order)" value={params.x} onChange={(x) => set({ x })} />
                 <Select label="Layout" value={params.mode} onChange={(mode) => set({ mode })} options={[{ value: 'stack', label: 'stacked panes' }, { value: 'overlay', label: 'overlaid' }]} />
                 <Toggle label="Log scale" value={params.log} onChange={(log) => set({ log })} />
+                {params.columns.length >= 2 && (
+                    <>
+                        <Select label="Compare to (real)" value={params.columns.includes(params.reference) ? params.reference : params.columns[0]} onChange={(reference) => set({ reference })} options={params.columns} />
+                        <Select label="Metrics on" value={params.compare_on || 'values'} onChange={(compare_on) => set({ compare_on })} options={[{ value: 'values', label: 'values' }, { value: 'changes', label: 'row-to-row changes' }]} />
+                    </>
+                )}
             </>
         ),
         Result: ({ result, params }) => {
@@ -176,7 +218,7 @@ export const PANEL_TYPES = {
             const x = xValues(result);
             if (params.mode === 'overlay' || names.length === 1) {
                 const data = names.map((n, i) => ({ x, y: result.columns[n], type: 'scattergl', mode: 'lines', name: n, line: { color: CATEGORY_COLORS[i % 5], width: 1.4 } }));
-                return <><LookaheadNote columns={result.lookahead} /><Plot data={data} layout={{ hovermode: 'x unified', xaxis: { type: xType(result) }, yaxis: { type: params.log ? 'log' : 'linear' } }} height={380} /></>;
+                return <><LookaheadNote columns={result.lookahead} /><DownsampleNote result={result} /><Plot data={data} layout={{ hovermode: 'x unified', xaxis: { type: xType(result) }, yaxis: { type: params.log ? 'log' : 'linear' } }} height={380} /><ComparisonTable comparison={result.comparison} /></>;
             }
             const rows = names.length, gap = 0.03, h = (1 - gap * (rows - 1)) / rows;
             const layout = { hovermode: 'x unified', xaxis: { type: xType(result), anchor: `y${rows}` } };
@@ -185,7 +227,7 @@ export const PANEL_TYPES = {
                 layout[`yaxis${axis}`] = { domain: [1 - (i + 1) * h - i * gap, 1 - i * h - i * gap], type: params.log ? 'log' : 'linear', title: { text: n.length > 22 ? `${n.slice(0, 20)}…` : n, font: { size: 10 } } };
                 return { x, y: result.columns[n], type: 'scattergl', mode: 'lines', name: n, xaxis: 'x', yaxis: `y${axis}`, line: { color: CATEGORY_COLORS[i % 5], width: 1.3 } };
             });
-            return <><LookaheadNote columns={result.lookahead} /><Plot data={data} layout={layout} height={Math.max(320, 170 * rows)} /></>;
+            return <><LookaheadNote columns={result.lookahead} /><DownsampleNote result={result} /><Plot data={data} layout={layout} height={Math.max(320, 170 * rows)} /><ComparisonTable comparison={result.comparison} /></>;
         },
     },
 

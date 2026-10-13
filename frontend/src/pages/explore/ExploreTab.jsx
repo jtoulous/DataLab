@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from "react";
 
 import { GlobalState } from '../../State.jsx';
 import { apiRequests } from '../../services/api_requests.js';
@@ -7,6 +7,8 @@ import { AppLoader, TypeBadge, CloseIcon } from '../../components/Utils.jsx';
 import Plot from '../../components/Plot.jsx';
 import ErrorBoundary from '../../components/ErrorBoundary.jsx';
 import { PLOT_COLORS } from '../../components/plotTheme.js';
+import { ColumnInput } from '../../components/ColumnInput.jsx';
+import ModelColumn from './ModelColumn.jsx';
 import ViewBar from '../dataset/ViewBar.jsx';
 import { PANEL_TYPES, PANEL_GROUPS } from './ExplorePanels.jsx';
 
@@ -32,7 +34,7 @@ function starterPanels(catalog) {
 /*                                      Panel                                          */
 /*=====================================================================================*/
 
-function ExplorePanel({ panel, dataset, catalog, view, runToken, onChange, onRemove, onDuplicate, onMove }) {
+const ExplorePanel = memo(function ExplorePanel({ panel, dataset, catalog, view, runToken, onChange, onRemove, onDuplicate, onMove }) {
     const def = PANEL_TYPES[panel.type];
     const [result, setResult] = useState(null);
     const [loading, setLoading] = useState(false);
@@ -104,21 +106,36 @@ function ExplorePanel({ panel, dataset, catalog, view, runToken, onChange, onRem
             )}
         </div>
     );
-}
+});
 
 
 /*=====================================================================================*/
 /*                                  Column editor                                      */
 /*=====================================================================================*/
 
-function ColumnEditor({ dataset, view, editing, onSaved, onCancel }) {
+function ColumnEditor({ dataset, catalog, view, editing, onSaved, onCancel }) {
     const empty = { name: '', formula: '', description: '' };
     const [form, setForm] = useState(editing || empty);
     const [preview, setPreview] = useState(null);
     const [error, setError] = useState(null);
     const [saving, setSaving] = useState(false);
+    const [recipe, setRecipe] = useState({ base: '', horizon: 12 });
 
     useEffect(() => { setForm(editing || empty); }, [editing]);
+
+    // Colonnes "cible" : valeur future d'une colonne, decalee de `horizon` lignes (lead)
+    const applyRecipe = (kind) => {
+        const base = recipe.base.trim() || catalog?.numeric?.[0];
+        if (!base) return;
+        const h = recipe.horizon;
+        const [suffix, formula, description] = {
+            up: ['up', `lead(${base}, ${h}) > ${base}`, `${base} is higher ${h} rows later (true / false)`],
+            return: ['ret', `lead(${base}, ${h}) / ${base} - 1`, `% change of ${base} over the next ${h} rows`],
+            change: ['diff', `lead(${base}, ${h}) - ${base}`, `change of ${base} over the next ${h} rows`],
+            value: ['future', `lead(${base}, ${h})`, `${base} ${h} rows later`],
+        }[kind];
+        setForm({ ...form, name: `${base}_${suffix}_${h}`.replace(/[^A-Za-z0-9_]/g, '_'), formula, description });
+    };
 
     useEffect(() => {
         if (!form.formula.trim()) {
@@ -151,10 +168,26 @@ function ColumnEditor({ dataset, view, editing, onSaved, onCancel }) {
                 onChange={(e) => setForm({ ...form, formula: e.target.value })} />
             <input placeholder="description (optional)" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
 
+            {!editing && (
+                <div className="ex-recipes--EX">
+                    <span>Target from</span>
+                    <ColumnInput placeholder={catalog?.numeric?.[0] || 'column'} value={recipe.base} onChange={(base) => setRecipe({ ...recipe, base })} />
+                    <span>in</span>
+                    <input type="number" min={1} value={recipe.horizon} onChange={(e) => setRecipe({ ...recipe, horizon: Number(e.target.value) || 1 })} />
+                    <span>rows:</span>
+                    <div>
+                        <button type="button" onClick={() => applyRecipe('up')} title="true / false: usable for classification">goes up?</button>
+                        <button type="button" onClick={() => applyRecipe('return')} title="number: usable for regression">% change</button>
+                        <button type="button" onClick={() => applyRecipe('change')} title="number: usable for regression">difference</button>
+                        <button type="button" onClick={() => applyRecipe('value')} title="number: usable for regression">future value</button>
+                    </div>
+                </div>
+            )}
+
             {error && <div className="ex-error--EX small">{error}</div>}
             {preview && (
                 <div className="ex-preview--EX">
-                    {preview.lookahead && <div className="ex-lookahead--EX">LOOKAHEAD — uses following rows: a target, not an input</div>}
+                    {preview.lookahead && <div className="ex-lookahead--EX">LOOKAHEAD — uses following rows: fine as a label/target, just never use it as a model input. The column still saves normally below.</div>}
                     {preview.numeric ? (
                         <>
                             <div className="ex-preview-stats--EX">
@@ -164,7 +197,7 @@ function ColumnEditor({ dataset, view, editing, onSaved, onCancel }) {
                                 <span>std <b>{formatNumber(s.std, 3)}</b></span>
                             </div>
                             <Plot height={80} data={[{ x: preview.tail.x, y: preview.tail.y, type: 'scatter', mode: 'lines', line: { color: PLOT_COLORS.real, width: 1.2 }, hoverinfo: 'y' }]}
-                                layout={{ margin: { l: 4, r: 4, t: 4, b: 4 }, xaxis: { visible: false }, yaxis: { visible: false }, showlegend: false }} />
+                                layout={{ margin: { l: 4, r: 4, t: 4, b: 4 }, xaxis: { visible: false, type: dataset.profile.time ? 'date' : '-' }, yaxis: { visible: false }, showlegend: false }} />
                         </>
                     ) : (
                         <div className="ex-preview-stats--EX">
@@ -209,6 +242,7 @@ function ExploreTab({ dataset, catalog, onChanged }) {
     const [editing, setEditing] = useState(null);
     const [columnFilter, setColumnFilter] = useState('');
     const [showFunctions, setShowFunctions] = useState(false);
+    const [columnMode, setColumnMode] = useState('formula');
     const [workspaceName, setWorkspaceName] = useState('');
     const [workspaces, setWorkspaces] = useState(dataset.workspaces || []);
     const [feedback, setFeedback] = useState(null);
@@ -256,6 +290,11 @@ function ExploreTab({ dataset, catalog, onChanged }) {
             .then(ws => { setPanels(ws.config.panels); setWorkspaceName(name); setRunToken(t => t + 1); })
             .catch(err => setFeedback(err.message));
     };
+    const deleteModelColumn = (name) => {
+        apiRequests.deleteFrozen(dataset.dataset_id, name)
+            .then(record => onChanged(record))
+            .catch(err => setFeedback(err.message));
+    };
     const deleteColumn = (name) => {
         apiRequests.deleteColumn(dataset.dataset_id, name)
             .then(data => onChanged({ ...dataset, derived_columns: data.derived_columns }))
@@ -263,11 +302,15 @@ function ExploreTab({ dataset, catalog, onChanged }) {
     };
 
     const f = columnFilter.toLowerCase();
+    const modelColumns = Object.entries(dataset.frozen || {}).filter(([key]) => !f || key.toLowerCase().includes(f));
+    // colonnes figees heritees du dataset parent : groupe a part (formule d'origine, pas modifiables)
+    const inherited = dataset.origin?.inherited || {};
     const groups = useMemo(() => {
         const byType = {};
-        catalog.columns.forEach(c => { (byType[c.type] ||= []).push(c); });
+        catalog.columns.filter(c => !inherited[c.key] && !(dataset.frozen || {})[c.key]).forEach(c => { (byType[c.type] ||= []).push(c); });
         return byType;
-    }, [catalog]);
+    }, [catalog, inherited, dataset.frozen]);
+    const inheritedShown = Object.entries(inherited).filter(([key, c]) => !f || key.toLowerCase().includes(f) || c.formula.toLowerCase().includes(f));
 
     return (
         <div className="explore--EX">
@@ -275,8 +318,18 @@ function ExploreTab({ dataset, catalog, onChanged }) {
             <aside className="ex-sidebar--EX">
                 <section className="ex-side--EX">
                     <h3>{editing ? `Edit “${editing.name}”` : 'New column'}</h3>
-                    <ColumnEditor dataset={dataset} view={view} editing={editing} onCancel={() => setEditing(null)}
-                        onSaved={(columns) => { onChanged({ ...dataset, derived_columns: columns }); setEditing(null); setFeedback('Column saved'); }} />
+                    {!editing && (
+                        <div className="ex-mode--EX">
+                            <button type="button" className={columnMode === 'formula' ? 'active' : ''} onClick={() => setColumnMode('formula')}>ƒ Formula</button>
+                            <button type="button" className={columnMode === 'model' ? 'active' : ''} onClick={() => setColumnMode('model')}>◆ Model prediction</button>
+                        </div>
+                    )}
+                    {!editing && columnMode === 'model' ? (
+                        <ModelColumn dataset={dataset} onSaved={(record) => { onChanged(record); setFeedback('Model column saved'); }} />
+                    ) : (
+                        <ColumnEditor dataset={dataset} catalog={catalog} view={view} editing={editing} onCancel={() => setEditing(null)}
+                            onSaved={(columns) => { onChanged({ ...dataset, derived_columns: columns }); setEditing(null); setFeedback('Column saved'); }} />
+                    )}
                     <button type="button" className="ex-link--EX" onClick={() => setShowFunctions(!showFunctions)}>
                         {showFunctions ? '▾' : '▸'} Formula reference
                     </button>
@@ -306,6 +359,29 @@ function ExploreTab({ dataset, catalog, onChanged }) {
                                 </div>
                             </div>
                         ))}
+                        {modelColumns.length > 0 && (
+                            <>
+                                <div className="ex-columns-group--EX"><span className="ex-model-badge--EX">◆ model</span> predictions kept as values</div>
+                                {modelColumns.map(([key, c]) => (
+                                    <div key={key} className="ex-column--EX derived model" title={`${c.run_name} · trained on ${c.trained_on}\ntarget: ${c.target}\n${formatCount(c.predicted)} rows predicted, ${formatCount(c.left_empty)} left empty`}>
+                                        <div><b>{key}</b><code>{c.model_label} · {c.output} · trained on {c.trained_on}</code></div>
+                                        <div className="ex-column-actions--EX">
+                                            <button type="button" title="Delete" onClick={() => deleteModelColumn(key)}>✕</button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </>
+                        )}
+                        {inheritedShown.length > 0 && (
+                            <>
+                                <div className="ex-columns-group--EX"><span className="ex-inherited-badge--EX">⤷ inherited</span> frozen values from {dataset.origin.parent_name}</div>
+                                {inheritedShown.map(([key, c]) => (
+                                    <div key={key} className="ex-column--EX inherited" title={`${c.description ? `${c.description}\n` : ''}Computed on ${c.from} with: ${c.formula}`}>
+                                        <div><b>{key}{c.lookahead && <i className="ex-target-tag--EX">target</i>}</b><code>{c.formula}</code></div>
+                                    </div>
+                                ))}
+                            </>
+                        )}
                         {Object.entries(groups).map(([type, cols]) => {
                             const shown = cols.filter(c => !f || c.key.includes(f) || c.label.toLowerCase().includes(f));
                             if (!shown.length) return null;
