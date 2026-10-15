@@ -1143,3 +1143,106 @@
 .ex-modelcol-unsaved--EX span {
     color: rgba(255, 255, 255, 0.35);
 }
+
+.ex-columns-note--EX {
+    margin: 8px 0 0;
+    font-size: 11.5px;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.ex-columns-note--EX b {
+    color: #ffb74d;
+    font-weight: 600;
+}
+
+.ex-agg-badge--EX {
+    padding: 1px 8px;
+    border-radius: 10px;
+    border: 1px solid rgba(144, 133, 233, 0.5);
+    color: #b3abf5;
+    font-size: 10.5px;
+}
+
+.ex-column--EX.aggregate b {
+    color: #b3abf5;
+}
+
+
+/* ── Filtres du scatter ── */
+
+.ex-filters--EX {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 6px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #141418;
+}
+
+.ex-filter--EX {
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr) 26px;
+    align-items: center;
+    gap: 8px;
+}
+
+.ex-filter--EX.default {
+    padding-bottom: 6px;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.ex-filter--EX.default > span {
+    font-size: 12px;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    color: rgba(255, 255, 255, 0.55);
+}
+
+.ex-field--EX .ex-filter--EX input[type="color"] {
+    width: 36px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 6px;
+    background: none;
+    cursor: pointer;
+}
+
+.ex-filter--EX > button,
+.ex-filter-add--EX {
+    border: none;
+    background: none;
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.ex-filter--EX > button:hover {
+    color: #ff8a80;
+}
+
+.ex-filter-add--EX {
+    align-self: flex-start;
+    padding: 3px 10px;
+    border: 1px dashed rgba(255, 183, 77, 0.5);
+    border-radius: 7px;
+    color: #ffb74d;
+}
+
+.ex-filter-add--EX:hover {
+    background: rgba(255, 183, 77, 0.1);
+}
+
+.ex-touch-badge--EX {
+    padding: 1px 8px;
+    border-radius: 10px;
+    border: 1px solid rgba(201, 133, 0, 0.6);
+    color: #ffc85a;
+    font-size: 10.5px;
+}
+
+.ex-column--EX.touch b {
+    color: #ffc85a;
+}

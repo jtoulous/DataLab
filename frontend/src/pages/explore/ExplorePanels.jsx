@@ -1,6 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
-import React, { useState } from "react";
-import Plot from '../../components/Plot.jsx';
+import React, { useState, useContext } from "react";
+import PlotBase from '../../components/Plot.jsx';
+import { PlotScaleContext } from '../../components/plotScale.js';
 import { ColumnInput } from '../../components/ColumnInput.jsx';
 import { PLOT_COLORS, DIVERGING, SEQUENTIAL } from '../../components/plotTheme.js';
 import { formatNumber, formatCount, formatPct, formatDate } from '../../services/format.js';
@@ -101,6 +102,12 @@ function GroupByInput({ label, value, rule, onChange, catalog }) {
 const fmt = (x, d = 4) => formatNumber(x, d);
 const pval = (p) => (p === null || p === undefined ? '—' : p < 0.0001 ? '< 0.0001' : p.toFixed(4));
 const CATEGORY_COLORS = PLOT_COLORS.series;
+
+// Tous les graphiques d'un panneau suivent son echelle de hauteur (bouton ↕ de l'entete)
+function Plot({ height = 340, ...props }) {
+    const scale = useContext(PlotScaleContext);
+    return <PlotBase {...props} height={Math.round(height * scale)} />;
+}
 const OTHER_COLOR = 'rgba(224, 224, 224, 0.45)';
 
 function Reading({ children }) {
@@ -357,51 +364,93 @@ export const PANEL_TYPES = {
 
     scatter: {
         label: 'Scatter', icon: '⁘', group: 'Relations',
-        description: 'Relation between two columns, colored / sized by others, with the mean of Y along X.',
-        defaults: (c) => ({ x: c.numeric[0] || '', y: c.numeric[1] || c.numeric[0] || '', color: '', size: '' }),
-        Params: ({ params, set }) => (
-            <>
-                <FormulaInput label="X" value={params.x} onChange={(x) => set({ x })} />
-                <FormulaInput label="Y" value={params.y} onChange={(y) => set({ y })} />
-                <FormulaInput label="Color (optional)" value={params.color} onChange={(color) => set({ color })} />
-                <FormulaInput label="Size (optional)" value={params.size} onChange={(size) => set({ size })} />
-            </>
-        ),
+        description: 'Relation between two columns, with the mean of Y along X. Color by a column, or by filters (conditions with a color each).',
+        defaults: (c) => ({ x: c.numeric[0] || '', y: c.numeric[1] || c.numeric[0] || '', color: '', size: '', filters: [], default_color: '' }),
+        Params: ({ params, set }) => {
+            const filters = params.filters || [];
+            const baseColor = params.default_color || CATEGORY_COLORS[0];
+            const update = (i, patch) => set({ filters: filters.map((f, k) => (k === i ? { ...f, ...patch } : f)) });
+            const add = () => set({ filters: [...filters, { formula: '', color: CATEGORY_COLORS[(filters.length + 1) % CATEGORY_COLORS.length] }] });
+            return (
+                <>
+                    <FormulaInput label="X" value={params.x} onChange={(x) => set({ x })} />
+                    <FormulaInput label="Y" value={params.y} onChange={(y) => set({ y })} />
+                    <FormulaInput label="Color by a column (optional)" value={params.color} onChange={(color) => set({ color })} />
+                    <FormulaInput label="Size (optional)" value={params.size} onChange={(size) => set({ size })} />
+                    <div className="ex-field--EX wide">
+                        <span>Filters — a point takes the color of the first filter it matches</span>
+                        <div className="ex-filters--EX">
+                            <div className="ex-filter--EX default">
+                                <input type="color" value={baseColor} title="Color of the points that match no filter" onChange={(e) => set({ default_color: e.target.value })} />
+                                <span>Default color — the points that match no filter</span>
+                                {params.default_color && <button type="button" title="Back to the standard color" onClick={() => set({ default_color: '' })}>↺</button>}
+                            </div>
+                            {filters.map((f, i) => (
+                                <div key={i} className="ex-filter--EX">
+                                    <input type="color" value={f.color || CATEGORY_COLORS[(i + 1) % CATEGORY_COLORS.length]} title="Color of the points that match this filter" onChange={(e) => update(i, { color: e.target.value })} />
+                                    <ColumnInput value={f.formula || ''} placeholder="condition, e.g. trend_12 > 0" onChange={(formula) => update(i, { formula })} />
+                                    <button type="button" title="Remove this filter" onClick={() => set({ filters: filters.filter((_, k) => k !== i) })}>✕</button>
+                                </div>
+                            ))}
+                            <button type="button" className="ex-filter-add--EX" onClick={add}>+ Filter</button>
+                        </div>
+                    </div>
+                </>
+            );
+        },
         Result: ({ result, params }) => {
             const sizes = result.size ? (() => {
                 const v = result.size.filter(s => s !== null);
                 const lo = Math.min(...v), hi = Math.max(...v);
                 return result.size.map(s => (s === null || hi === lo ? 5 : 3 + 12 * ((s - lo) / (hi - lo))));
             })() : 4;
+            const baseColor = params.default_color || CATEGORY_COLORS[0];
+            const groups = result.groups || [];
+            const filterColor = (i) => (params.filters || []).filter(f => (f.formula || '').trim())[i]?.color || CATEGORY_COLORS[(i + 1) % CATEGORY_COLORS.length];
             let data;
-            if (result.color_kind === 'category') {
+            if (result.color_kind === 'filters') {
+                const parts = [{ x: [], y: [], s: [] }, ...groups.map(() => ({ x: [], y: [], s: [] }))];   // 0 = aucun filtre
+                result.x.forEach((x, i) => {
+                    const part = parts[result.group[i] + 1];
+                    part.x.push(x); part.y.push(result.y[i]); part.s.push(Array.isArray(sizes) ? sizes[i] : sizes);
+                });
+                data = [{ ...parts[0], type: 'scattergl', mode: 'markers', name: `no filter (${formatCount(result.other_n)})`, marker: { color: baseColor, size: parts[0].s, opacity: 0.4 } }];
+                groups.forEach((g, i) => data.push({
+                    x: parts[i + 1].x, y: parts[i + 1].y, type: 'scattergl', mode: 'markers', name: `${g.formula} (${formatCount(g.n)})`,
+                    marker: { color: filterColor(i), size: parts[i + 1].s, opacity: 0.7 },
+                }));
+            } else if (result.color_kind === 'category') {
                 const { colorOf, label } = splitByCategory(result.color);
-                const groups = {};
+                const byLabel = {};
                 result.x.forEach((x, i) => {
                     const g = label(result.color[i]);
-                    (groups[g] ||= { x: [], y: [], s: [], color: colorOf(result.color[i]) });
-                    groups[g].x.push(x); groups[g].y.push(result.y[i]); groups[g].s.push(Array.isArray(sizes) ? sizes[i] : sizes);
+                    (byLabel[g] ||= { x: [], y: [], s: [], color: colorOf(result.color[i]) });
+                    byLabel[g].x.push(x); byLabel[g].y.push(result.y[i]); byLabel[g].s.push(Array.isArray(sizes) ? sizes[i] : sizes);
                 });
-                data = Object.entries(groups).map(([g, v]) => ({ x: v.x, y: v.y, type: 'scattergl', mode: 'markers', name: g, marker: { color: v.color, size: v.s, opacity: 0.6 } }));
+                data = Object.entries(byLabel).map(([g, v]) => ({ x: v.x, y: v.y, type: 'scattergl', mode: 'markers', name: g, marker: { color: v.color, size: v.s, opacity: 0.6 } }));
             } else {
                 data = [{
                     x: result.x, y: result.y, type: 'scattergl', mode: 'markers', name: 'rows',
                     marker: result.color
                         ? { size: sizes, color: result.color, colorscale: 'Viridis', opacity: 0.6, colorbar: { thickness: 10, title: { text: params.color, font: { size: 10 } } } }
-                        : { size: sizes, color: CATEGORY_COLORS[0], opacity: 0.4 },
+                        : { size: sizes, color: baseColor, opacity: 0.4 },
                 }];
             }
             if (result.binned) data.push({ x: result.binned.x, y: result.binned.y, type: 'scatter', mode: 'lines+markers', name: 'mean of Y per X slice', line: { color: PLOT_COLORS.real, width: 3 }, marker: { size: 5 } });
-            if (result.fit) {
-                const xs = [Math.min(...result.x), Math.max(...result.x)];
-                data.push({ x: xs, y: xs.map(v => result.fit.intercept + result.fit.slope * v), type: 'scatter', mode: 'lines', name: 'linear fit', line: { color: 'rgba(255,255,255,0.5)', dash: 'dash', width: 1.5 } });
+            const span = result.x.length ? [Math.min(...result.x), Math.max(...result.x)] : null;
+            if (result.fit && span) {
+                data.push({ x: span, y: span.map(v => result.fit.intercept + result.fit.slope * v), type: 'scatter', mode: 'lines', name: 'linear fit', line: { color: 'rgba(255,255,255,0.5)', dash: 'dash', width: 1.5 } });
             }
+            groups.forEach((g, i) => {
+                if (g.fit && span) data.push({ x: span, y: span.map(v => g.fit.intercept + g.fit.slope * v), type: 'scatter', mode: 'lines', name: `${g.formula} fit`, line: { color: filterColor(i), width: 2.5 } });
+            });
             return (
                 <>
                     <LookaheadNote columns={result.lookahead} />
-                    <Figures items={[['Rows', formatCount(result.n)], ['Pearson r', fmt(result.pearson, 4)], ['Spearman ρ', fmt(result.spearman, 4)], result.fit && ['Slope', fmt(result.fit.slope)]]} />
+                    <Figures items={[['Rows', formatCount(result.n)], ['Pearson r', fmt(result.pearson, 4)], ['Spearman ρ', fmt(result.spearman, 4)], result.fit && ['Slope', fmt(result.fit.slope)],
+                        ...groups.map(g => [g.formula, `${(g.share * 100).toFixed(0)}% · mean Y ${fmt(g.y_mean)}`])]} />
                     <Plot data={data} layout={{ xaxis: { title: { text: params.x, font: { size: 10 } } }, yaxis: { title: { text: params.y, font: { size: 10 } } } }} height={440} />
-                    <Reading>Pearson measures a straight-line relation, Spearman any monotonic one (rank-based, robust to outliers). The orange line shows the average Y in each slice of X: it reveals curved relations the numbers miss.</Reading>
+                    <Reading>Pearson measures a straight-line relation, Spearman any monotonic one (rank-based, robust to outliers). The orange line shows the average Y in each slice of X: it reveals curved relations the numbers miss.{groups.length ? ' Each colored line is the linear fit of the points that took that filter\'s color: different slopes mean the relation changes with the condition.' : ''}</Reading>
                 </>
             );
         },

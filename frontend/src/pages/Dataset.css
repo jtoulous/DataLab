@@ -1047,21 +1047,3 @@ button.dataset-title--DS.switchable:hover {
     white-space: nowrap;
 }
 
-.subset-btn--DS {
-    position: absolute;
-    right: 76px;
-    padding: 8px 16px;
-    border-radius: 9px;
-    border: 1px solid rgba(105, 240, 174, 0.35);
-    background: rgba(105, 240, 174, 0.06);
-    color: #69f0ae;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.2s;
-}
-
-.subset-btn--DS:hover {
-    background: rgba(105, 240, 174, 0.14);
-    border-color: rgba(105, 240, 174, 0.6);
-}

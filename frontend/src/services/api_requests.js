@@ -103,6 +103,13 @@ export const apiRequests = {
     predictPreview: (dataset_id, run_id, model_key, output, threshold) => post('/api/model/predict_preview', { dataset_id, run_id, model_key, output, threshold }, "Prediction error"),
     predictColumn: (dataset_id, fields) => post('/api/model/predict_column', { dataset_id, ...fields }, "Error creating the column"),
     deleteFrozen: (dataset_id, name) => post('/api/delete_frozen', { dataset_id, name }, "Error deleting column"),
+    previewResample: (dataset_id, spec) => post('/api/preview_resample', { dataset_id, spec }, "Resample error"),
+    createResample: (dataset_id, name, spec, description = '') => post('/api/create_resample', { dataset_id, name, spec, description }, "Error creating the resampled dataset"),
+    previewAggregate: (dataset_id, source_id, convention) => post('/api/preview_aggregate', { dataset_id, source_id, convention }, "Aggregation error"),
+    createAggregate: (dataset_id, source_id, items, convention) => post('/api/create_aggregate', { dataset_id, source_id, items, convention }, "Error creating the columns"),
+    previewFirstTouch: (dataset_id, spec) => post('/api/preview_first_touch', { dataset_id, spec }, "First touch error"),
+    createFirstTouch: (dataset_id, spec) => post('/api/create_first_touch', { dataset_id, spec }, "Error creating the label column"),
+    getJobs: (dataset_id) => fetch(`${BASE_URL}/api/jobs?dataset_id=${encodeURIComponent(dataset_id)}`).then(res => handleResponse(res, "Error loading jobs")),
     deleteDataset: (dataset_id) => post('/api/delete_dataset', { dataset_id }, "Error deleting dataset"),
 
 
@@ -112,6 +119,9 @@ export const apiRequests = {
 
     saveColumn: (dataset_id, { name, formula, description }) => post('/api/save_column', { dataset_id, name, formula, description }, "Error saving column"),
 
+    getSavedFormulas: () => fetch(`${BASE_URL}/api/saved_formulas`).then(res => handleResponse(res, "Error loading saved formulas")),
+    saveFormula: ({ name, formula, description }) => post('/api/save_formula', { name, formula, description }, "Error saving the formula"),
+    deleteFormula: (name) => post('/api/delete_formula', { name }, "Error deleting the formula"),
     deleteColumn: (dataset_id, name) => post('/api/delete_column', { dataset_id, name }, "Error deleting column"),
 
 

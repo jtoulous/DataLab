@@ -4,6 +4,7 @@ import csv
 import json
 import asyncio
 import tempfile
+import traceback
 
 import numpy as np
 import pandas as pd
@@ -14,7 +15,9 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from .app.DataLoader import LoadError, COLUMN_TYPES, SUPPORTED_EXTENSIONS
 from .app.Engine import FormulaError, FUNCTIONS_DOC, ANALYSES, describe, run_analysis, _json
 from .app import Modeling
+from .app import Resample
 from .app.ModelingManager import ModelingManager
+from .app.Jobs import JobManager
 
 
 
@@ -29,6 +32,7 @@ class RouterManager:
         self.store = store
         self.router = APIRouter()
         self.modeling = ModelingManager(db_manager, ws_manager, store)
+        self.jobs = JobManager(ws_manager)
 
         self.routes()
 
@@ -45,7 +49,7 @@ class RouterManager:
         except HTTPException:
             raise
         except Exception as error:
-            print(f"api/{name} ===> ERROR: {type(error).__name__}: {str(error)}", flush=True)
+            print(f"api/{name} ===> ERROR: {type(error).__name__}: {str(error)}\n{traceback.format_exc()}", flush=True)
             raise HTTPException(status_code=500, detail=f'{type(error).__name__}: {error}')
 
     def _dataset_or_404(self, dataset_id):
@@ -64,7 +68,7 @@ class RouterManager:
         df_columns = set(self.store.typed(dataset_id)[1]['columns'])
         reserved = {f.split('(')[0].strip() for key in FUNCTIONS_DOC for f in key.replace(',', '/').split('/')}
         if not name.isidentifier() or name in df_columns or name in reserved or name in self.db_manager.get_columns(dataset_id):
-            raise HTTPException(status_code=400, detail='Name must be a valid identifier (letters, digits, _) not used by a dataset column or a function')
+            raise HTTPException(status_code=400, detail=f'"{name}": a column name must be a valid identifier (letters, digits, _) not used by another column or a function')
 
     def _family(self, dataset_id):
         """Le dataset d'origine (racine) et tous les sous-datasets qui en descendent, en arbre aplati."""
@@ -82,7 +86,9 @@ class RouterManager:
         def walk(node_id, depth):
             d = datasets[node_id]
             out.append({'dataset_id': node_id, 'name': d['name'], 'parent_id': d.get('parent_id'), 'depth': depth,
-                        'rows': (d.get('summary') or {}).get('rows'), 'origin': d.get('origin')})
+                        'rows': (d.get('summary') or {}).get('rows'), 'origin': d.get('origin'),
+                        'step_seconds': ((d.get('summary') or {}).get('time') or {}).get('median_step_seconds'),
+                        'step_label': ((d.get('summary') or {}).get('time') or {}).get('step_label')})
             for child in sorted(children.get(node_id, []), key=lambda c: c['created_at']):
                 walk(child['dataset_id'], depth + 1)
         walk(root, 0)
@@ -311,6 +317,119 @@ class RouterManager:
             return response
 
 
+        @self.router.post("/api/preview_resample")
+        async def preview_resample(
+            dataset_id: str = Form(...),
+            spec: str = Form(...),
+        ):
+            """Bougies produites / vides / incompletes, lignes fines de la premiere bougie, agregations proposees."""
+            self._dataset_or_404(dataset_id)
+            return await self._call('preview_resample', lambda: self.store.preview_resample(dataset_id, json.loads(spec)))
+
+
+        @self.router.post("/api/create_resample")
+        async def create_resample(
+            dataset_id: str = Form(...),
+            name: str = Form(...),
+            spec: str = Form(...),
+            description: str = Form(''),
+        ):
+            """Lance en tache de fond la creation du dataset a la timeframe plus grosse ; renvoie le job_id."""
+            self._dataset_or_404(dataset_id)
+            parsed = json.loads(spec)
+            # validation immediate (regle, colonnes) pour renvoyer l'erreur tout de suite
+            await self._call('create_resample', lambda: Resample.describe_spec(self.store.view(dataset_id, {}), parsed) and {'ok': True})
+
+            def work(progress):
+                return self.store.create_resample(dataset_id, name.strip(), parsed, description, progress)
+            job_id = await self.jobs.start('resample', dataset_id, f'{name.strip() or "resample"} · {parsed.get("rule")}', work,
+                                           on_done=lambda _: self._broadcast_list())
+            return JSONResponse(content={'job_id': job_id})
+
+
+        @self.router.post("/api/preview_aggregate")
+        async def preview_aggregate(
+            dataset_id: str = Form(...),
+            source_id: str = Form(...),
+            convention: str = Form('start'),
+        ):
+            """Bougies du dataset courant couvertes par les lignes du dataset plus fin, exemple de fenetre."""
+            self._dataset_or_404(dataset_id)
+            return await self._call('preview_aggregate', lambda: self.store.preview_aggregate(dataset_id, source_id, convention))
+
+
+        @self.router.post("/api/create_aggregate")
+        async def create_aggregate(
+            dataset_id: str = Form(...),
+            source_id: str = Form(...),
+            items: str = Form(...),
+            convention: str = Form('start'),
+        ):
+            """Nouvelles colonnes du dataset courant, calculees sur les lignes d'un dataset plus fin (tache de fond)."""
+            self._dataset_or_404(dataset_id)
+            parsed = [dict(i, name=(i.get('name') or '').strip()) for i in json.loads(items)]
+            for item in parsed:
+                self._check_column_name(dataset_id, item['name'])
+            # colonnes de la source verifiees tout de suite (pas de tache lancee pour rien)
+            fine = await asyncio.to_thread(self.store.view, source_id, {})
+            unknown = [i['source'] for i in parsed if i.get('source') not in fine.df.columns and i.get('source') not in fine.custom]
+            if unknown:
+                raise HTTPException(status_code=400, detail=f'Not a column of the source dataset: {", ".join(map(str, unknown))} — create it there first (New column)')
+
+            def work(progress):
+                self.store.create_aggregate(dataset_id, source_id, parsed, convention, progress)
+                return dataset_id
+
+            async def done(_):
+                await self._broadcast_list()
+            job_id = await self.jobs.start('aggregate', dataset_id, f'{len(parsed)} column{"s" if len(parsed) > 1 else ""} from a finer dataset', work, on_done=done)
+            return JSONResponse(content={'job_id': job_id})
+
+
+        @self.router.post("/api/preview_first_touch")
+        async def preview_first_touch(
+            dataset_id: str = Form(...),
+            spec: str = Form(...),
+        ):
+            """Repartition des labels sur les dernieres lignes (apercu rapide)."""
+            self._dataset_or_404(dataset_id)
+            return await self._call('preview_first_touch', lambda: self.store.preview_first_touch(dataset_id, json.loads(spec)))
+
+
+        @self.router.post("/api/create_first_touch")
+        async def create_first_touch(
+            dataset_id: str = Form(...),
+            spec: str = Form(...),
+        ):
+            """Colonne label (1 / -1 / 0) : quel niveau est touche en premier, en tache de fond."""
+            self._dataset_or_404(dataset_id)
+            parsed = json.loads(spec)
+            parsed['name'] = (parsed.get('name') or '').strip()
+            parsed['rows_name'] = (parsed.get('rows_name') or '').strip()
+            self._check_column_name(dataset_id, parsed['name'])
+            if parsed['rows_name']:
+                if parsed['rows_name'] == parsed['name']:
+                    raise HTTPException(status_code=400, detail='The two new columns need different names')
+                self._check_column_name(dataset_id, parsed['rows_name'])
+            # verification immediate des formules (erreurs avant de lancer la tache)
+            await self._call('create_first_touch', lambda: self.store.preview_first_touch(dataset_id, parsed, last_rows=2000) and {'ok': True})
+
+            def work(progress):
+                return self.store.create_first_touch(dataset_id, parsed, progress)
+
+            async def done(_):
+                await self._broadcast_list()
+            job_id = await self.jobs.start('first_touch', dataset_id, f'first touch · {parsed["name"]}', work, on_done=done)
+            return JSONResponse(content={'job_id': job_id})
+
+
+        @self.router.get("/api/jobs")
+        async def get_jobs(
+            dataset_id: str = Query(None),
+        ):
+            return JSONResponse(content=self.jobs.list(dataset_id))
+
+
         @self.router.post("/api/delete_dataset")
         async def delete_dataset(
             dataset_id: str = Form(...),
@@ -384,6 +503,38 @@ class RouterManager:
             columns = self.db_manager.get_columns(dataset_id)
             await self.ws_manager.columns_update(dataset_id, columns)
             return JSONResponse(content={'status': 'ok', 'derived_columns': columns})
+
+
+        #==================    SAVED FORMULAS    ==================#
+
+        @self.router.get("/api/saved_formulas")
+        async def get_saved_formulas():
+            return JSONResponse(content=self.db_manager.get_saved_formulas())
+
+
+        @self.router.post("/api/save_formula")
+        async def save_formula(
+            name: str = Form(...),
+            formula: str = Form(...),
+            description: str = Form(None),
+        ):
+            """Enregistre une formule dans la bibliotheque (ecrase celle du meme nom)."""
+            name, formula = name.strip(), formula.strip()
+            reserved = {f.split('(')[0].strip() for key in FUNCTIONS_DOC for f in key.replace(',', '/').split('/')}
+            if not name.isidentifier() or name in reserved:
+                raise HTTPException(status_code=400, detail='Name must be a valid identifier (letters, digits, _) that is not a function name')
+            if not formula:
+                raise HTTPException(status_code=400, detail='Write a formula first')
+            self.db_manager.save_formula(name, formula, description)
+            return JSONResponse(content={'status': 'ok', 'formulas': self.db_manager.get_saved_formulas()})
+
+
+        @self.router.post("/api/delete_formula")
+        async def delete_formula(
+            name: str = Form(...),
+        ):
+            self.db_manager.delete_formula(name)
+            return JSONResponse(content={'status': 'ok', 'formulas': self.db_manager.get_saved_formulas()})
 
 
         #==================    ANALYSES    ==================#

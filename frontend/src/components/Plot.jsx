@@ -144,6 +144,20 @@ function PlotInner({ data, layout, height = 340, className = '', onSelectX, live
         Plotly.relayout(node, live);
     }, [liveKey, ready]);
 
+    // Plotly ne suit que la fenetre : quand le panneau change de largeur (plein / demi), on recalcule le graphique
+    useEffect(() => {
+        const node = ref.current;
+        const wrap = wrapRef.current;
+        if (!node || !wrap || typeof ResizeObserver === 'undefined') return;
+        let frame = null;
+        const observer = new ResizeObserver(() => {
+            cancelAnimationFrame(frame);
+            frame = requestAnimationFrame(() => { if (node.data) Plotly.Plots.resize(node); });
+        });
+        observer.observe(wrap);
+        return () => { observer.disconnect(); cancelAnimationFrame(frame); };
+    }, []);
+
     // Purge au demontage
     useEffect(() => {
         const node = ref.current;

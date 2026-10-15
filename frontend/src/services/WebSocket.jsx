@@ -56,6 +56,10 @@ function WebsocketManager() {
                     case 'model_run_update':
                         appEvents.emit('model_run', data.payload);
                         break;
+
+                    case 'job_update':
+                        appEvents.emit('job', data.payload);
+                        break;
                 }
             };
         };

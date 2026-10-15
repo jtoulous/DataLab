@@ -91,7 +91,17 @@ class DatabaseManager:
             )
         '''
 
-        self.execute_queries([query_1, query_2, query_3, query_4, query_5])
+        # Formules sauvegardees : bibliotheque globale (commune a tous les datasets)
+        query_6 = '''
+            CREATE TABLE IF NOT EXISTS saved_formulas (
+                name TEXT PRIMARY KEY,
+                formula TEXT,
+                description TEXT,
+                created_at TEXT
+            )
+        '''
+
+        self.execute_queries([query_1, query_2, query_3, query_4, query_5, query_6])
 
         # Sous-datasets : lien vers le dataset d'origine + comment il a ete decoupe (ajout a une base existante)
         existing = {row[1] for row in self.execute_query(f'PRAGMA table_info({self.DATASETS_TBL})')}
@@ -245,6 +255,30 @@ class DatabaseManager:
 
     def delete_column(self, dataset_id, name):
         self.execute_queries([(f'DELETE FROM {self.COLUMNS_TBL} WHERE dataset_id = ? AND name = ?', (dataset_id, name))])
+
+    #####                                                                                        #####
+    ##################################################################################################
+    ##################################################################################################
+
+
+
+    ##################################################################################################
+    ##################################################################################################
+    #####                                   Saved formulas                                       #####
+
+    def get_saved_formulas(self):
+        rows = self.execute_query('SELECT name, formula, description, created_at FROM saved_formulas ORDER BY name COLLATE NOCASE')
+        return [{'name': r[0], 'formula': r[1], 'description': r[2] or '', 'created_at': r[3]} for r in rows]
+
+    def save_formula(self, name, formula, description=''):
+        self.execute_queries([(
+            '''INSERT INTO saved_formulas (name, formula, description, created_at) VALUES (?, ?, ?, ?)
+               ON CONFLICT(name) DO UPDATE SET formula = excluded.formula, description = excluded.description''',
+            (name, formula, description or '', self.now_utc())
+        )])
+
+    def delete_formula(self, name):
+        self.execute_queries([('DELETE FROM saved_formulas WHERE name = ?', (name,))])
 
     #####                                                                                        #####
     ##################################################################################################

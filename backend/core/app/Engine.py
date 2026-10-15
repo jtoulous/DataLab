@@ -50,6 +50,11 @@ FUNCTIONS_DOC = {
 }
 
 LOOKAHEAD_FUNCTIONS = {'lead'}
+# fonctions qui dependent des lignes voisines ou de la position : dans un sous-dataset a plusieurs morceaux,
+# elles doivent etre calculees morceau par morceau. Les autres (abs, where, comparaisons, hour()...) se calculent d'un coup.
+SEGMENTED_FUNCTIONS = {'lag', 'lead', 'diff', 'pct', 'mean', 'median', 'sum', 'std', 'var', 'min', 'max', 'count', 'quantile', 'skew', 'kurt',
+                       'ema', 'zscore', 'pctrank', 'slope', 'efficiency', 'corr', 'cumsum', 'cummax', 'cummin', 'crossup', 'crossdown',
+                       'ffill', 'elapsed', 'rownum'}
 MAX_POINTS = 100000
 
 
@@ -324,6 +329,12 @@ class View:
         self.mask = None
         self.slices = self._segment_slices(segment_starts)
         self.slice_caches = [{} for _ in self.slices or []]
+        self.slice_frames = None
+        self.segmented_cache = {}
+        if self.slices:
+            # copie propre a cette vue : les morceaux sont des tranches de CE tableau, jamais d'un tableau partage
+            # avec les autres requetes (pandas n'est pas sur en parallele sur des tranches du meme tableau)
+            self.df = self.df.copy(deep=True)
 
         filter_formula = (self.settings.get('filter') or '').strip()
         if filter_formula:
@@ -345,14 +356,35 @@ class View:
         bounds = [0, *cuts.tolist(), len(keys)]
         return list(zip(bounds[:-1], bounds[1:]))
 
+    def _needs_pieces(self, formula, depth=0):
+        """La formule (y compris via les colonnes derivees qu'elle cite) regarde-t-elle les lignes voisines ?"""
+        if formula in self.segmented_cache:
+            return self.segmented_cache[formula]
+        try:
+            tree = ast.parse((formula or '').strip(), mode='eval')
+        except SyntaxError:
+            return True
+        needs = False
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in SEGMENTED_FUNCTIONS:
+                needs = True
+            elif isinstance(node, ast.Name) and node.id in self.custom and depth < 25:
+                needs = needs or self._needs_pieces(self.custom[node.id], depth + 1)
+            if needs:
+                break
+        self.segmented_cache[formula] = needs
+        return needs
+
     def _evaluate(self, formula):
         """Formule sur tout le df (non filtre) -> (serie, lookahead), morceau par morceau si besoin."""
-        if not self.slices:
+        if not self.slices or not self._needs_pieces(formula):
             ev = self.evaluator()
             return ev.evaluate(formula), ev.lookahead
+        if self.slice_frames is None:
+            self.slice_frames = [self.df.iloc[a:b] for a, b in self.slices]
         parts, lookahead = [], False
-        for (a, b), cache in zip(self.slices, self.slice_caches):
-            ev = FormulaEvaluator(self.df.iloc[a:b], self.custom, self.time_index, cache=cache, lookahead_columns=self.lookahead_columns)
+        for frame, cache in zip(self.slice_frames, self.slice_caches):
+            ev = FormulaEvaluator(frame, self.custom, self.time_index, cache=cache, lookahead_columns=self.lookahead_columns)
             parts.append(ev.evaluate(formula))
             lookahead = lookahead or ev.lookahead
         return pd.concat(parts), lookahead
@@ -450,7 +482,7 @@ class View:
         view.profile, view.custom, view.settings = self.profile, self.custom, self.settings
         view.inherited, view.lookahead_columns = self.inherited, self.lookahead_columns
         view.time_index, view.df, view.cache, view.mask = self.time_index, out, {}, None
-        view.slices, view.slice_caches = None, []
+        view.slices, view.slice_caches, view.slice_frames, view.segmented_cache = None, [], None, {}
         return view
 
 
@@ -614,25 +646,73 @@ def _box(view, p):
     return {'boxes': boxes}
 
 
+def _is_condition(series):
+    """Vrai / faux (ou 0 / 1) : une condition utilisable comme filtre."""
+    values = series.dropna()
+    return series.dtype == bool or (len(values) > 0 and bool(values.isin([0, 1]).all()))
+
+
 def _scatter(view, p):
+    """
+    Nuage x / y. Couleur : une colonne (palette continue ou categories), ou des FILTRES : chaque filtre est une
+    condition (ex. trend_12 > 0) avec sa couleur. Un point prend la couleur du PREMIER filtre qu'il verifie ;
+    les autres gardent la couleur par defaut.
+    """
     x, la_x = view.column(p['x'])
     y, la_y = view.column(p['y'])
+    filters = [f for f in (p.get('filters') or []) if (f.get('formula') or '').strip()]
     data = {'x': x, 'y': y}
     color_kind = None
-    if p.get('color'):
+    lookahead = [f for f, la in ((p['x'], la_x), (p['y'], la_y)) if la]
+    for i, f in enumerate(filters):
+        mask, la = view.column(f['formula'], numeric=False)
+        if not _is_condition(mask):
+            raise FormulaError(f'Filter "{f["formula"]}" is not a condition — compare it, e.g. {f["formula"]} > 0')
+        data[f'f{i}'] = mask
+        if la:
+            lookahead.append(f['formula'])
+    if filters:
+        color_kind = 'filters'
+    elif p.get('color'):
         c, _ = view.column(p['color'], numeric=False)
         data['c'] = c
-        color_kind = 'numeric' if pd.api.types.is_numeric_dtype(c) else 'category'
+        # une condition (vrai / faux, 0 / 1) est numerique pour pandas, mais une palette continue n'a aucun sens dessus
+        if _is_condition(c):
+            data['c'] = c.fillna(0).astype(bool).map({True: 'true', False: 'false'})
+            color_kind = 'category'
+        else:
+            color_kind = 'numeric' if pd.api.types.is_numeric_dtype(c) else 'category'
     if p.get('size'):
         data['s'], _ = view.column(p['size'])
     frame = pd.DataFrame(data).dropna(subset=['x', 'y'])
+
+    groups = []
+    if filters:
+        assigned = np.full(len(frame), -1)
+        for i in reversed(range(len(filters))):       # le premier filtre gagne : on l'ecrit en dernier
+            assigned[frame[f'f{i}'].fillna(False).astype(bool).to_numpy()] = i
+        frame['g'] = assigned
+        for i, f in enumerate(filters):
+            part = frame[frame['g'] == i]
+            group = {'formula': f['formula'], 'n': int(len(part)), 'share': float(len(part) / len(frame)) if len(frame) else 0.0,
+                     'y_mean': float(part['y'].mean()) if len(part) else None}
+            if len(part) > 3 and part['x'].nunique() > 1:
+                slope, intercept = np.polyfit(part['x'], part['y'], 1)
+                group['fit'] = {'slope': float(slope), 'intercept': float(intercept)}
+                group['pearson'] = _clean(part['x'].corr(part['y']))
+            groups.append(group)
+
     sample = frame.sample(min(len(frame), int(p.get('max_points', 8000))), random_state=0) if len(frame) else frame
     result = {
         'x': sample['x'].tolist(), 'y': sample['y'].tolist(), 'n': int(len(frame)),
         'color': [_json(v) for v in sample['c']] if 'c' in sample else None, 'color_kind': color_kind,
         'size': _clean_list(sample['s']) if 's' in sample else None,
-        'lookahead': [f for f, la in ((p['x'], la_x), (p['y'], la_y)) if la],
+        'lookahead': lookahead,
     }
+    if filters:
+        result['groups'] = groups
+        result['group'] = sample['g'].tolist()
+        result['other_n'] = int((frame['g'] == -1).sum())
     if len(frame) > 3 and frame['x'].nunique() > 1:
         slope, intercept = np.polyfit(frame['x'], frame['y'], 1)
         result['fit'] = {'slope': float(slope), 'intercept': float(intercept)}

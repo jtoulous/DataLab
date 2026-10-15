@@ -1,0 +1,237 @@
+.rs-top--RS {
+    display: grid;
+    grid-template-columns: 1.3fr 1fr;
+    gap: 22px;
+}
+
+.rs-rules--RS {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+}
+
+.rs-rules--RS button {
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: transparent;
+    color: rgba(255, 255, 255, 0.7);
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    cursor: pointer;
+}
+
+.rs-rules--RS button.active {
+    border-color: rgba(255, 127, 50, 0.6);
+    background: rgba(255, 127, 50, 0.16);
+    color: #ffb74d;
+}
+
+.rs-rules--RS input {
+    width: 150px;
+}
+
+.rs-preview--RS code {
+    font-family: var(--font-mono);
+    color: #ffb74d;
+}
+
+.rs-example--RS {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-top: 4px;
+    font-size: 12px;
+}
+
+.rs-example--RS span {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.rs-example--RS em {
+    font-style: normal;
+    font-size: 11.5px;
+    color: #6fd3c8;
+}
+
+.rs-table--RS {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 330px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.rs-row--RS {
+    display: grid;
+    grid-template-columns: 22px 190px minmax(0, 1fr) 190px 150px 22px;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px;
+    border-radius: 7px;
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.rs-row--RS.head {
+    background: none;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.35);
+}
+
+.rs-row--RS.extra {
+    background: rgba(144, 133, 233, 0.07);
+}
+
+.rs-row--RS.off {
+    opacity: 0.4;
+}
+
+.rs-row--RS.fixed {
+    background: none;
+}
+
+.rs-row--RS input,
+.rs-row--RS select {
+    padding: 5px 8px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: #141418;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 12px;
+    color-scheme: dark;
+    min-width: 0;
+}
+
+.rs-row--RS input[type="checkbox"] {
+    accent-color: #ff7f32;
+}
+
+.rs-row--RS code {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.75);
+}
+
+.rs-source--RS {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.rs-agg--RS {
+    display: flex;
+    gap: 5px;
+    min-width: 0;
+}
+
+.rs-agg--RS select {
+    flex: 1 1 auto;
+}
+
+.rs-agg--RS input {
+    width: 58px;
+    flex: 0 0 58px;
+}
+
+.rs-remove--RS {
+    border: none;
+    background: none;
+    color: rgba(255, 255, 255, 0.4);
+    cursor: pointer;
+}
+
+.rs-remove--RS:hover {
+    color: #ff8a80;
+}
+
+.rs-add--RS {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+}
+
+.rs-preset--RS {
+    padding: 4px 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(144, 133, 233, 0.4);
+    background: rgba(144, 133, 233, 0.08);
+    color: #b3abf5;
+    font-size: 11.5px;
+    cursor: pointer;
+}
+
+.rs-preset--RS:hover {
+    background: rgba(144, 133, 233, 0.18);
+}
+
+.rs-bottom--RS {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr;
+    gap: 10px;
+}
+
+.rs-progress--RS {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.rs-progress--RS > div {
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+}
+
+.rs-progress--RS i {
+    display: block;
+    height: 100%;
+    background: #ff7f32;
+    transition: width 0.3s;
+}
+
+@media (max-width: 1100px) {
+    .rs-top--RS {
+        grid-template-columns: 1fr;
+    }
+    .rs-row--RS {
+        grid-template-columns: 22px 140px minmax(0, 1fr) 150px 120px 22px;
+    }
+}
+
+.settings-modal.subset-modal--SB.rs-small--RS {
+    width: min(760px, 94vw);
+}
+
+.rs-preview--RS .muted {
+    font-size: 11.5px;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.rs-num--RS {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+    text-align: center;
+}
+
+.rs-preview--RS .warn {
+    display: inline;
+}
+
+.rs-source--RS select {
+    flex: 1 1 auto;
+}

@@ -5,35 +5,17 @@ import { apiRequests } from '../services/api_requests.js';
 import { appEvents } from '../services/events.js';
 import { formatCount, formatDate } from '../services/format.js';
 import { ColumnsContext } from '../components/columnsContext.js';
+import { buildCatalog } from '../services/catalog.js';
 import { BackArrow, AppLoader, GearIcon, CloseIcon } from '../components/Utils.jsx';
 
 import OverviewTab from './dataset/OverviewTab.jsx';
 import DataTab from './dataset/DataTab.jsx';
 import ExploreTab from './explore/ExploreTab.jsx';
 import ModelingTab from './modeling/ModelingTab.jsx';
-import SubsetModal from './dataset/SubsetModal.jsx';
+import FeaturesTab from './features/FeaturesTab.jsx';
 
 import "../components/SettingsModal.css";
 import "./Dataset.css"
-
-
-// Catalogue des colonnes utilisables dans les formulaires (colonnes du fichier + colonnes derivees)
-function buildCatalog(dataset) {
-    if (!dataset?.profile) return null;
-    const columns = dataset.profile.order
-        .map(key => ({ key, ...dataset.profile.columns[key] }))
-        .filter(c => c.type !== 'ignore');
-    const derived = Object.entries(dataset.derived_columns || {}).map(([key, c]) => ({ key, label: key, type: 'derived', formula: c.formula, description: c.description }));
-    const byType = (types) => columns.filter(c => types.includes(c.type)).map(c => c.key);
-    return {
-        columns, derived,
-        numeric: [...byType(['numeric', 'boolean']), ...derived.map(d => d.key)],
-        categorical: byType(['categorical', 'boolean', 'text']),
-        datetime: byType(['datetime']),
-        all: [...columns.map(c => c.key), ...derived.map(d => d.key)],
-        time: !!dataset.profile.time,
-    };
-}
 
 
 function DatasetSettingsModal({ dataset, onClose, onChanged }) {
@@ -122,7 +104,9 @@ function DatasetSwitcher({ dataset }) {
             <button type="button" className={`dataset-title--DS ${family.length > 1 ? 'switchable' : ''}`} onClick={() => family.length > 1 && setOpen(o => !o)}>
                 <span>{dataset.name}{family.length > 1 && <i>▾</i>}</span>
                 {origin
-                    ? <em className="origin">⤷ subset of {origin.parent_name} · {formatCount(origin.rows)} / {formatCount(origin.parent_rows)} rows{origin.pieces > 1 ? ` · ${origin.pieces} pieces` : ''}</em>
+                    ? <em className="origin">{origin.kind === 'resample'
+                        ? `⤷ ${origin.resample?.rule_label || ''} resample of ${origin.parent_name}`
+                        : `⤷ subset of ${origin.parent_name} · ${formatCount(origin.rows)} / ${formatCount(origin.parent_rows)} rows`}{origin.pieces > 1 ? ` · ${formatCount(origin.pieces)} pieces` : ''}</em>
                     : <em>{dataset.filename}{family.length > 1 ? ` · ${family.length - 1} subset${family.length > 2 ? 's' : ''}` : ''}</em>}
             </button>
             {open && (
@@ -131,7 +115,7 @@ function DatasetSwitcher({ dataset }) {
                         <button type="button" key={f.dataset_id} className={f.dataset_id === dataset.dataset_id ? 'current' : ''} style={{ paddingLeft: 12 + f.depth * 18 }}
                             onClick={() => { setOpen(false); if (f.dataset_id !== dataset.dataset_id) navigate(`/dataset?id=${f.dataset_id}`); }}>
                             <span className="name">{f.depth > 0 && <b>⤷</b>}{f.name}</span>
-                            <span className="meta">{formatCount(f.rows)} rows{f.origin?.pieces > 1 ? ` · ${f.origin.pieces} pieces` : ''}</span>
+                            <span className="meta">{f.origin?.kind === 'resample' ? `${f.origin.resample?.rule_label} · ` : ''}{formatCount(f.rows)} rows{f.origin?.pieces > 1 ? ` · ${f.origin.pieces} pieces` : ''}</span>
                         </button>
                     ))}
                 </div>
@@ -150,7 +134,6 @@ function Dataset() {
     const [dataset, setDataset] = useState(null);
     const [error, setError] = useState(null);
     const [showSettings, setShowSettings] = useState(false);
-    const [showSubset, setShowSubset] = useState(false);
 
     const load = useCallback(() => {
         apiRequests.getDataset(datasetId)
@@ -186,6 +169,7 @@ function Dataset() {
     const tabs = [
         { key: 'overview', label: 'Overview' },
         { key: 'data', label: 'Data' },
+        { key: 'features', label: 'Features' },
         { key: 'explore', label: 'Explore' },
         { key: 'modeling', label: 'Modelling' },
     ];
@@ -207,7 +191,6 @@ function Dataset() {
                     <div><span>Time axis</span>{p.time ? `${p.time.column} · ${p.time.step_label || '?'}` : 'none'}</div>
                     {p.time && <div><span>Range</span>{formatDate(p.time.start, false)} → {formatDate(p.time.end, false)}</div>}
                 </div>
-                <button type="button" className="subset-btn--DS" onClick={() => setShowSubset(true)} title="Create a new dataset from periods of this one">+ Subset</button>
                 <button className="settings-btn" onClick={() => setShowSettings(true)}><GearIcon size={22} /></button>
             </div>
 
@@ -225,11 +208,11 @@ function Dataset() {
             <div className="tab-content--DS" style={{ top: headerCollapsed ? '0px' : '115px' }}>
                 {currentTab === 'overview' && <OverviewTab dataset={dataset} onChanged={setDataset} />}
                 {currentTab === 'data' && <DataTab dataset={dataset} catalog={catalog} onChanged={setDataset} />}
+                {currentTab === 'features' && <FeaturesTab dataset={dataset} catalog={catalog} onChanged={setDataset} />}
                 {currentTab === 'explore' && <ExploreTab dataset={dataset} catalog={catalog} onChanged={setDataset} />}
                 {currentTab === 'modeling' && <ModelingTab dataset={dataset} catalog={catalog} onChanged={setDataset} />}
             </div>
 
-            {showSubset && <SubsetModal dataset={dataset} catalog={catalog} onClose={() => setShowSubset(false)} />}
             {showSettings && <DatasetSettingsModal dataset={dataset} onClose={() => setShowSettings(false)} onChanged={(record) => { setDataset(record); load(); }} />}
         </div>
         </ColumnsContext.Provider>
