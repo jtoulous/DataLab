@@ -38,6 +38,7 @@ const ExplorePanel = memo(function ExplorePanel({ panel, dataset, catalog, view,
     const [error, setError] = useState(null);
     const [collapsed, setCollapsed] = useState(false);
     const lastRun = useRef(null);
+    const [ranParams, setRanParams] = useState(null);   // parametres du dernier calcul affiche (outils qui relancent un calcul sur le meme graphique)
 
     const run = useCallback(() => {
         const key = JSON.stringify([view, panel.params, panel.type]);
@@ -45,7 +46,7 @@ const ExplorePanel = memo(function ExplorePanel({ panel, dataset, catalog, view,
         setLoading(true);
         setError(null);
         apiRequests.analyze(dataset.dataset_id, panel.type, panel.params, view)
-            .then(data => { if (lastRun.current === key) setResult(data); })
+            .then(data => { if (lastRun.current === key) { setResult(data); setRanParams(panel.params); } })
             .catch(err => { if (lastRun.current === key) { setError(err.message); setResult(null); } })
             .finally(() => { if (lastRun.current === key) setLoading(false); });
     }, [dataset.dataset_id, panel.type, panel.params, view]);
@@ -97,7 +98,10 @@ const ExplorePanel = memo(function ExplorePanel({ panel, dataset, catalog, view,
                             <div className={loading ? 'ex-result-loading--EX' : ''}>
                                 <ErrorBoundary className="ex-error--EX" resetKey={result}>
                                     <PlotScaleContext.Provider value={scale}>
-                                        <def.Result result={result} params={panel.params} />
+                                        <def.Result result={result} params={panel.params} ctx={{
+                                            datasetId: dataset.dataset_id, view, ranParams, set,
+                                            extra: panel.extra || {}, setExtra: (patch) => onChange({ ...panel, extra: { ...(panel.extra || {}), ...patch } }),
+                                        }} />
                                     </PlotScaleContext.Provider>
                                 </ErrorBoundary>
                                 <div className="ex-panel-meta--EX">

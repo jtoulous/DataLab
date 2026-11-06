@@ -1246,3 +1246,207 @@
 .ex-column--EX.touch b {
     color: #ffc85a;
 }
+
+/* Couleur d'une ligne / d'un filtre, ou invisible */
+.ex-colorpick--EX {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.ex-field--EX .ex-colorpick--EX input[type="color"],
+.ex-colorpick-none--EX {
+    width: 32px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 6px;
+    background: none;
+    cursor: pointer;
+}
+
+.ex-colorpick-none--EX {
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 14px;
+    background: repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.06) 0 4px, transparent 4px 8px);
+}
+
+.ex-colorpick-eye--EX {
+    border: none;
+    background: none;
+    padding: 0 2px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.ex-colorpick-eye--EX:hover {
+    color: #ffb74d;
+}
+
+.ex-filter--EX {
+    grid-template-columns: 56px minmax(0, 1fr) 26px;
+}
+
+.ex-lines--EX {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 14px;
+}
+
+.ex-line--EX {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+}
+
+.ex-line--EX.hidden code {
+    opacity: 0.4;
+    text-decoration: line-through;
+}
+
+/* Echelle de droite : glisser verticalement = etirer / tasser l'axe Y, double-clic = ajuster */
+.plot-yscale--P {
+    position: absolute;
+    cursor: ns-resize;
+    z-index: 2;
+}
+
+.plot-yscale--P:hover,
+.plot-yscale--P.locked {
+    background: linear-gradient(90deg, rgba(255, 127, 50, 0.07), transparent);
+}
+
+.plot-yscale--P.locked {
+    border-left: 1px solid rgba(255, 127, 50, 0.35);
+}
+
+/* Filtre activable / desactivable */
+.ex-filter--EX:not(.default) {
+    grid-template-columns: 50px 56px minmax(0, 1fr) 26px;
+}
+
+.ex-filter--EX.default {
+    grid-template-columns: 56px minmax(0, 1fr) 26px;
+    padding-left: 58px;
+}
+
+.ex-filter--EX.off > *:not(.toggle):not(:last-child) {
+    opacity: 0.35;
+}
+
+/* Scatter : zones et clusters */
+.ex-zone-bar--EX {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0 8px;
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.ex-zone-bar--EX select,
+.ex-zone-bar--EX input {
+    height: 28px;
+    padding: 0 6px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: #141418;
+    color: #fff;
+    font-size: 12px;
+}
+
+.ex-zone-bar--EX input {
+    width: 64px;
+}
+
+.ex-zone-bar--EX label {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.ex-zone-btn--EX {
+    height: 28px;
+    padding: 0 12px;
+    border-radius: 7px;
+    border: 1px solid rgba(255, 183, 77, 0.5);
+    background: none;
+    color: #ffb74d;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.ex-zone-btn--EX:hover:not(:disabled),
+.ex-zone-btn--EX.active {
+    background: rgba(255, 183, 77, 0.16);
+}
+
+.ex-zone-btn--EX:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.ex-zone-clear--EX,
+.ex-zone-actions--EX button {
+    border: none;
+    background: none;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.ex-zone-clear--EX:hover,
+.ex-zone-actions--EX button:hover {
+    color: #ffb74d;
+}
+
+.ex-zone-sep--EX {
+    width: 1px;
+    height: 20px;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.ex-zone-table--EX {
+    margin-top: 10px;
+    overflow-x: auto;
+}
+
+.ex-zone-share--EX {
+    font-weight: 600;
+}
+
+.ex-zone-lift--EX {
+    margin-left: 6px;
+    font-style: normal;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.45);
+}
+
+.ex-zone-lift--EX.up {
+    color: #66bb6a;
+}
+
+.ex-zone-lift--EX.down {
+    color: #ef5350;
+}
+
+.ex-zone-split--EX {
+    display: block;
+    font-style: normal;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.ex-zone-actions--EX {
+    white-space: nowrap;
+}
+
+.ex-zone-note--EX {
+    margin: 6px 0 0;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.45);
+    line-height: 1.5;
+}

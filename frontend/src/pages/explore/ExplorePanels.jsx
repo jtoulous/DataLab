@@ -1,10 +1,11 @@
 /* eslint-disable react-refresh/only-export-components */
-import React, { useState, useContext } from "react";
+import React, { useState, useContext, useEffect, useRef } from "react";
 import PlotBase from '../../components/Plot.jsx';
 import { PlotScaleContext } from '../../components/plotScale.js';
 import { ColumnInput } from '../../components/ColumnInput.jsx';
 import { PLOT_COLORS, DIVERGING, SEQUENTIAL } from '../../components/plotTheme.js';
 import { formatNumber, formatCount, formatPct, formatDate } from '../../services/format.js';
+import { apiRequests } from '../../services/api_requests.js';
 
 
 /*=====================================================================================*/
@@ -50,6 +51,39 @@ function NumberInput({ label, value, onChange, min, max, step = 1 }) {
         </label>
     );
 }
+
+// Couleur d'une ligne / d'un filtre, ou invisible (les points concernes disparaissent du graphique)
+function ColorPick({ color, hidden, onChange, title }) {
+    return (
+        <span className={`ex-colorpick--EX ${hidden ? 'hidden' : ''}`}>
+            {hidden
+                ? <button type="button" className="ex-colorpick-none--EX" title="Invisible — click to give it a color again" onClick={() => onChange({ hidden: false })}>∅</button>
+                : <input type="color" value={color} title={title} onChange={(e) => onChange({ color: e.target.value, hidden: false })} />}
+            <button type="button" className="ex-colorpick-eye--EX" title={hidden ? 'Make it visible' : 'Make it invisible'} onClick={() => onChange({ hidden: !hidden })}>{hidden ? '◌' : '●'}</button>
+        </span>
+    );
+}
+
+// Liste de filtres { formula, color, hidden } : une condition par ligne, la premiere qui matche gagne
+function ColorFilters({ filters, onChange, colorOf, what }) {
+    const update = (i, patch) => onChange(filters.map((f, k) => (k === i ? { ...f, ...patch } : f)));
+    return (
+        <>
+            {filters.map((f, i) => (
+                <div key={i} className={`ex-filter--EX ${f.off ? 'off' : ''}`}>
+                    <button type="button" className={`toggle ${f.off ? '' : 'active'}`} title={f.off ? 'Filter disabled — click to enable it' : 'Filter enabled — click to disable it'} onClick={() => update(i, { off: !f.off })}><span className="toggle-knob" /></button>
+                    <ColorPick color={f.color || colorOf(i)} hidden={f.hidden} title={`Color of the ${what} that match this filter`} onChange={(patch) => update(i, patch)} />
+                    <ColumnInput value={f.formula || ''} placeholder="condition, e.g. trend_12 > 0" onChange={(formula) => update(i, { formula })} />
+                    <button type="button" title="Remove this filter" onClick={() => onChange(filters.filter((_, k) => k !== i))}>✕</button>
+                </div>
+            ))}
+            <button type="button" className="ex-filter-add--EX" onClick={() => onChange([...filters, { formula: '', color: colorOf(filters.length) }])}>+ Filter</button>
+        </>
+    );
+}
+
+// Filtres effectivement envoyes au backend (formule non vide), dans le meme ordre que result.filters / result.groups
+const activeFilters = (filters) => (filters || []).filter(f => (f.formula || '').trim() && !f.off);
 
 function Toggle({ label, value, onChange }) {
     return (
@@ -200,41 +234,272 @@ const xType = (result) => (result.x_kind === 'time' ? 'date' : '-');
 /*                                    Panel types                                      */
 /*=====================================================================================*/
 
+/*=====================================================================================*/
+/*                         Scatter : zones dessinees et clusters                       */
+/*=====================================================================================*/
+
+const ZONE_COLOR = '#ffb74d';
+const CLUSTER_COLOR = '#e0e0e0';
+const num = (v) => Number(Number(v).toPrecision(6));
+
+// Rectangle -> condition reutilisable comme filtre (ou colonne)
+const zoneFormula = (p, z) => `(${p.x}) >= ${num(z.x0)} & (${p.x}) <= ${num(z.x1)} & (${p.y}) >= ${num(z.y0)} & (${p.y}) <= ${num(z.y1)}`;
+
+// Une ligne de stats : part de chaque classe dans la zone (et sur le debut / la fin dans le temps), vs la part globale
+function ZoneRow({ label, stats, base, classes, colorOf, actions }) {
+    return (
+        <tr>
+            <td><b>{label}</b></td>
+            <td>{formatCount(stats.n)}</td>
+            {classes.map(c => {
+                const share = stats.share[c], ref = base.share[c];
+                const lift = share !== null && ref ? share / ref : null;
+                return (
+                    <td key={c}>
+                        <span className="ex-zone-share--EX" style={{ color: colorOf(c) }}>{formatPct(share)}</span>
+                        {lift !== null && <i className={`ex-zone-lift--EX ${lift >= 1.15 ? 'up' : lift <= 0.87 ? 'down' : ''}`}>×{lift.toFixed(2)}</i>}
+                        <em className="ex-zone-split--EX" title="Share in the first 70% of the time / in the last 30%">{formatPct(stats.early.share[c], 0)} / {formatPct(stats.late.share[c], 0)}</em>
+                    </td>
+                );
+            })}
+            <td>{fmt(stats.y_mean)}</td>
+            <td className="ex-zone-actions--EX">{actions}</td>
+        </tr>
+    );
+}
+
+function ScatterZones({ data, layout, height, params, ctx, classColor, className: classLabel }) {
+    const zones = ctx?.extra?.zones || [];
+    const [mode, setMode] = useState('pan');
+    const [stats, setStats] = useState(null);
+    const [clusters, setClusters] = useState(null);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState(null);
+    const [cluster, setCluster] = useState({ target: '', algo: 'dbscan', eps: 3, min_points: 15, k: 4 });
+    const rangeRef = useRef(null);
+    const ran = ctx?.ranParams;
+    const filtersOf = (p) => activeFilters(p?.filters);
+    const ranKey = JSON.stringify([ran?.x, ran?.y, ran?.filters, ctx?.view]);
+
+    // stats des zones : recalculees quand les zones ou le calcul affiche changent
+    const zonesKey = JSON.stringify(zones.map(z => [z.x0, z.x1, z.y0, z.y1]));
+    useEffect(() => {
+        if (!ctx || !ran) return;
+        let alive = true;
+        apiRequests.analyze(ctx.datasetId, 'scatter_zones', { x: ran.x, y: ran.y, filters: ran.filters, zones }, ctx.view)
+            .then(d => { if (alive) { setStats(d); setError(null); } })
+            .catch(e => { if (alive) setError(e.message); });
+        return () => { alive = false; };
+    }, [zonesKey, ranKey]);   // eslint-disable-line react-hooks/exhaustive-deps
+
+    // les clusters d'un ancien calcul ne correspondent plus au nuage affiche
+    useEffect(() => { setClusters(null); }, [ranKey]);
+
+    if (!ctx) return <Plot data={data} layout={layout} height={height} />;
+
+    const setZones = (next) => ctx.setExtra({ zones: next });
+    const addZone = (z) => setZones([...zones, { ...z, name: `Zone ${zones.reduce((m, q) => Math.max(m, Number(String(q.name).replace(/\D/g, '')) || 0), 0) + 1}` }]);
+    const addFilter = (formula) => ctx.set({ filters: [...(params.filters || []), { formula, color: ZONE_COLOR }] });
+
+    const runClusters = () => {
+        const r = rangeRef.current;
+        setBusy(true); setError(null);
+        apiRequests.analyze(ctx.datasetId, 'scatter_zones', {
+            x: ran.x, y: ran.y, filters: ran.filters, zones: [],
+            cluster: { ...cluster, target: cluster.target === '' ? null : Number(cluster.target), window: r ? { x0: r.x[0], x1: r.x[1], y0: r.y[0], y1: r.y[1] } : null },
+        }, ctx.view)
+            .then(d => setClusters(d.clusters))
+            .catch(e => setError(e.message))
+            .finally(() => setBusy(false));
+    };
+
+    const shapes = [
+        ...zones.map(z => ({ type: 'rect', xref: 'x', yref: 'y', x0: z.x0, x1: z.x1, y0: z.y0, y1: z.y1, line: { color: ZONE_COLOR, width: 1.5, dash: 'dash' }, fillcolor: 'rgba(255,183,77,0.06)',
+            label: { text: z.name, textposition: 'top left', font: { size: 10, color: ZONE_COLOR } } })),
+        ...(clusters?.items || []).map((c, i) => ({ type: 'path', xref: 'x', yref: 'y', path: `M ${c.polygon.map(p => p.join(',')).join(' L ')} Z`,
+            line: { color: CLUSTER_COLOR, width: 1.2 }, fillcolor: 'rgba(255,255,255,0.04)', label: { text: `C${i + 1}`, font: { size: 10, color: CLUSTER_COLOR } } })),
+    ];
+    const live = { dragmode: mode === 'zone' ? 'select' : 'pan', selectdirection: 'any', shapes };
+    const classes = (stats?.classes || []).map(String);
+    const targets = filtersOf(ran).map((f, i) => ({ f, i })).filter(({ f }) => !f.hidden);
+
+    return (
+        <>
+            <div className="ex-zone-bar--EX">
+                <button type="button" className={`ex-zone-btn--EX ${mode === 'zone' ? 'active' : ''}`} onClick={() => setMode(mode === 'zone' ? 'pan' : 'zone')}
+                    title="Then drag a rectangle on the chart">{mode === 'zone' ? '▭ Drawing zones — click to go back to pan' : '▭ Draw a zone'}</button>
+                <span className="ex-zone-sep--EX" />
+                <span className="ex-zone-label--EX">Clusters of</span>
+                <select value={cluster.target} onChange={(e) => setCluster({ ...cluster, target: e.target.value })}>
+                    <option value="">all visible points</option>
+                    {targets.map(({ f, i }) => <option key={i} value={i}>{f.formula}</option>)}
+                    <option value="-1">points matching no filter</option>
+                </select>
+                <select value={cluster.algo} onChange={(e) => setCluster({ ...cluster, algo: e.target.value })}>
+                    <option value="dbscan">DBSCAN (dense areas)</option>
+                    <option value="kmeans">K-means (k groups)</option>
+                </select>
+                {cluster.algo === 'dbscan' ? (
+                    <>
+                        <label title="Neighbourhood radius, in % of the visible window">radius % <input type="number" min={0.2} max={50} step={0.5} value={cluster.eps} onChange={(e) => setCluster({ ...cluster, eps: Number(e.target.value) })} /></label>
+                        <label title="Minimum points within the radius to start a cluster">min points <input type="number" min={2} max={5000} value={cluster.min_points} onChange={(e) => setCluster({ ...cluster, min_points: Number(e.target.value) })} /></label>
+                    </>
+                ) : (
+                    <label>k <input type="number" min={1} max={30} value={cluster.k} onChange={(e) => setCluster({ ...cluster, k: Number(e.target.value) })} /></label>
+                )}
+                <button type="button" className="ex-zone-btn--EX" disabled={busy || !ran} onClick={runClusters}>{busy ? 'Clustering…' : '◎ Cluster the visible window'}</button>
+                {clusters && <button type="button" className="ex-zone-clear--EX" onClick={() => setClusters(null)}>clear clusters</button>}
+            </div>
+
+            <Plot data={data} layout={layout} height={height} live={live}
+                onRange={(r) => { rangeRef.current = r; }}
+                onSelectBox={(x0, x1, y0, y1) => addZone({ x0, x1, y0, y1 })} />
+
+            {error && <div className="ex-error--EX">{error}</div>}
+            {stats && (zones.length > 0 || clusters?.items?.length > 0) && (
+                <div className="ex-zone-table--EX">
+                    <table className="ex-table--EX">
+                        <thead>
+                            <tr>
+                                <th>Zone</th><th>Points</th>
+                                {classes.map(c => <th key={c} style={{ color: classColor(Number(c)) }}>{classLabel(Number(c))}</th>)}
+                                <th>Mean Y</th><th />
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <ZoneRow label="All visible points" stats={stats.base} base={stats.base} classes={classes} colorOf={(c) => classColor(Number(c))} />
+                            {zones.map((z, i) => stats.zones[i] && (
+                                <ZoneRow key={`z${i}`} label={z.name} stats={stats.zones[i]} base={stats.base} classes={classes} colorOf={(c) => classColor(Number(c))} actions={<>
+                                    <button type="button" title="Add this zone as a filter (a condition you can also reuse as a column)" onClick={() => addFilter(zoneFormula(ran, z))}>→ filter</button>
+                                    <button type="button" title="Copy the condition" onClick={() => navigator.clipboard?.writeText(zoneFormula(ran, z))}>⧉</button>
+                                    <button type="button" title="Remove this zone" onClick={() => setZones(zones.filter((_, k) => k !== i))}>✕</button>
+                                </>} />
+                            ))}
+                            {(clusters?.items || []).map((c, i) => (
+                                <ZoneRow key={`c${i}`} label={`C${i + 1} (${formatCount(c.members)} pts)`} stats={c} base={stats.base} classes={classes} colorOf={(k) => classColor(Number(k))} actions={
+                                    <button type="button" title="Keep the rectangle around this cluster as a zone" onClick={() => addZone(c.box)}>→ zone</button>
+                                } />
+                            ))}
+                        </tbody>
+                    </table>
+                    <p className="ex-zone-note--EX">
+                        Stats on every row (not only the points drawn), without the points of invisible filters. ×1.30 = 30% more of that class than over all visible points.
+                        Small numbers = share in the first 70% of the time / in the last 30%{stats.split_at ? ` (split on ${formatDate(stats.split_at)})` : ''}: a zone found by eye that does not hold on the last 30% is probably noise.
+                        {clusters && ` Clustering: ${formatCount(clusters.points)} points in the window${clusters.used < clusters.points ? ` (${formatCount(clusters.used)} sampled)` : ''}, ${formatCount(clusters.noise)} left out as noise; stats count every point inside each outline.`}
+                    </p>
+                </div>
+            )}
+        </>
+    );
+}
+
+
+// Couleurs par defaut des filtres du line chart : franches, pour trancher sur les couleurs des lignes
+const SERIES_FILTER_COLORS = ['#4caf50', '#ef5350', '#ffd54f', '#29b6f6', '#ab47bc'];
+
+// Traces d'une ligne coloree par filtres. Le segment (i-1 -> i) prend la classe du point i :
+// -1 = aucun filtre (couleur de la ligne), k = filtre k (sa couleur, ou rien s'il est invisible).
+// Une trace par classe, les morceaux separes par des null ; une trace "survol" porte la valeur
+// (les traces de segments sont ignorees au survol pour ne pas dupliquer la valeur).
+function lineTraces(x, y, group, filters, { name, color, ...base }) {
+    if (!group || !filters.length) return [{ ...base, x, y, name, line: { color, width: 1.4 } }];
+    const classes = [-1, ...filters.map((_, k) => k)].filter(c => c === -1 || !filters[c].hidden);
+    const colorOf = (c) => (c === -1 ? color : filters[c].color || SERIES_FILTER_COLORS[c % SERIES_FILTER_COLORS.length]);
+    const traces = classes.map(c => {
+        const tx = [], ty = [];
+        for (let i = 0; i < y.length; i++) {
+            if (group[i] !== c) continue;
+            if (i === 0 || group[i - 1] !== c) {
+                if (tx.length) { tx.push(x[i]); ty.push(null); }
+                if (i > 0) { tx.push(x[i - 1]); ty.push(y[i - 1]); }
+            }
+            tx.push(x[i]); ty.push(y[i]);
+        }
+        return { ...base, x: tx, y: ty, name, showlegend: c === -1, hoverinfo: 'skip', connectgaps: false, line: { color: colorOf(c), width: c === -1 ? 1.4 : 1.8 } };
+    });
+    // survol : la valeur des points visibles, en marqueurs quasi invisibles
+    const hidden = new Set(filters.map((f, k) => (f.hidden ? k : null)).filter(k => k !== null));
+    const hy = hidden.size ? y.map((v, i) => (hidden.has(group[i]) ? null : v)) : y;
+    traces.push({ ...base, x, y: hy, name, mode: 'markers', showlegend: false, marker: { color, size: 1, opacity: 0.01 } });
+    return traces;
+}
+
+
 export const PANEL_TYPES = {
 
     series: {
         label: 'Line chart', icon: '〰', group: 'Explore',
-        description: 'Columns plotted along the time axis (or any X), stacked or overlaid.',
-        defaults: (c) => ({ columns: c.numeric.slice(0, 2), x: '', mode: 'stack', log: false, reference: '', compare_on: 'values' }),
-        Params: ({ params, set }) => (
-            <>
-                <MultiInput label="Y columns" values={params.columns} onChange={(columns) => set({ columns })} />
-                <FormulaInput label="X (empty = time axis / row order)" value={params.x} onChange={(x) => set({ x })} />
-                <Select label="Layout" value={params.mode} onChange={(mode) => set({ mode })} options={[{ value: 'stack', label: 'stacked panes' }, { value: 'overlay', label: 'overlaid' }]} />
-                <Toggle label="Log scale" value={params.log} onChange={(log) => set({ log })} />
-                {params.columns.length >= 2 && (
-                    <>
-                        <Select label="Compare to (real)" value={params.columns.includes(params.reference) ? params.reference : params.columns[0]} onChange={(reference) => set({ reference })} options={params.columns} />
-                        <Select label="Metrics on" value={params.compare_on || 'values'} onChange={(compare_on) => set({ compare_on })} options={[{ value: 'values', label: 'values' }, { value: 'changes', label: 'row-to-row changes' }]} />
-                    </>
-                )}
-            </>
-        ),
+        description: 'Columns plotted along the time axis (or any X), stacked or overlaid. A color per line, filters to recolor or hide parts of the lines, and drag the price scale on the right to rescale (double-click it to fit).',
+        defaults: (c) => ({ columns: c.numeric.slice(0, 2), x: '', mode: 'stack', log: false, reference: '', compare_on: 'values', line_styles: {}, filters: [] }),
+        Params: ({ params, set }) => {
+            const styles = params.line_styles || {};
+            const setStyle = (n, patch) => set({ line_styles: { ...styles, [n]: { ...styles[n], ...patch } } });
+            return (
+                <>
+                    <MultiInput label="Y columns" values={params.columns} onChange={(columns) => set({ columns })} />
+                    {params.columns.length > 0 && (
+                        <div className="ex-field--EX wide">
+                            <span>Line colors</span>
+                            <div className="ex-lines--EX">
+                                {params.columns.map((n, i) => (
+                                    <span key={n} className={`ex-line--EX ${styles[n]?.hidden ? 'hidden' : ''}`}>
+                                        <ColorPick color={styles[n]?.color || CATEGORY_COLORS[i % CATEGORY_COLORS.length]} hidden={styles[n]?.hidden} title={`Color of ${n}`} onChange={(patch) => setStyle(n, patch)} />
+                                        <code>{n}</code>
+                                    </span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                    <div className="ex-field--EX wide">
+                        <span>Filters — where a condition holds, the lines take its color (the first colored filter that matches wins); an invisible filter always hides its part, wherever it is in the list</span>
+                        <div className="ex-filters--EX">
+                            <ColorFilters filters={params.filters || []} what="parts of the lines" onChange={(filters) => set({ filters })} colorOf={(i) => SERIES_FILTER_COLORS[i % SERIES_FILTER_COLORS.length]} />
+                        </div>
+                    </div>
+                    <FormulaInput label="X (empty = time axis / row order)" value={params.x} onChange={(x) => set({ x })} />
+                    <Select label="Layout" value={params.mode} onChange={(mode) => set({ mode })} options={[{ value: 'stack', label: 'stacked panes' }, { value: 'overlay', label: 'overlaid' }]} />
+                    <Toggle label="Log scale" value={params.log} onChange={(log) => set({ log })} />
+                    {params.columns.length >= 2 && (
+                        <>
+                            <Select label="Compare to (real)" value={params.columns.includes(params.reference) ? params.reference : params.columns[0]} onChange={(reference) => set({ reference })} options={params.columns} />
+                            <Select label="Metrics on" value={params.compare_on || 'values'} onChange={(compare_on) => set({ compare_on })} options={[{ value: 'values', label: 'values' }, { value: 'changes', label: 'row-to-row changes' }]} />
+                        </>
+                    )}
+                </>
+            );
+        },
         Result: ({ result, params }) => {
             const names = Object.keys(result.columns);
             const x = xValues(result);
-            if (params.mode === 'overlay' || names.length === 1) {
-                const data = names.map((n, i) => ({ x, y: result.columns[n], type: 'scattergl', mode: 'lines', name: n, line: { color: CATEGORY_COLORS[i % 5], width: 1.4 } }));
-                return <><LookaheadNote columns={result.lookahead} /><DownsampleNote result={result} /><Plot data={data} layout={{ hovermode: 'x unified', xaxis: { type: xType(result) }, yaxis: { type: params.log ? 'log' : 'linear' } }} height={380} /><ComparisonTable comparison={result.comparison} /></>;
-            }
-            const rows = names.length, gap = 0.03, h = (1 - gap * (rows - 1)) / rows;
-            const layout = { hovermode: 'x unified', xaxis: { type: xType(result), anchor: `y${rows}` } };
-            const data = names.map((n, i) => {
-                const axis = i === 0 ? '' : String(i + 1);
-                layout[`yaxis${axis}`] = { domain: [1 - (i + 1) * h - i * gap, 1 - i * h - i * gap], type: params.log ? 'log' : 'linear', title: { text: n.length > 22 ? `${n.slice(0, 20)}…` : n, font: { size: 10 } } };
-                return { x, y: result.columns[n], type: 'scattergl', mode: 'lines', name: n, xaxis: 'x', yaxis: `y${axis}`, line: { color: CATEGORY_COLORS[i % 5], width: 1.3 } };
+            const styles = params.line_styles || {};
+            const filters = activeFilters(params.filters);
+            const lineColor = (n, i) => styles[n]?.color || CATEGORY_COLORS[i % CATEGORY_COLORS.length];
+            const overlay = params.mode === 'overlay' || names.length === 1;
+            const shown = names.map((n, i) => ({ n, i })).filter(({ n }) => overlay || !styles[n]?.hidden);
+            const rows = Math.max(1, shown.length), gap = 0.04, h = (1 - gap * (rows - 1)) / rows;
+            const layout = { hovermode: 'x unified', margin: { l: 14, r: 66 }, xaxis: { type: xType(result), anchor: overlay ? 'y' : `y${rows}` }, annotations: [] };
+            const data = [];
+            shown.forEach(({ n, i }, k) => {
+                const axis = overlay || k === 0 ? '' : String(k + 1);
+                if (!overlay || k === 0) {
+                    const domain = overlay ? [0, 1] : [1 - (k + 1) * h - k * gap, 1 - k * h - k * gap];
+                    layout[`yaxis${axis}`] = { domain, side: 'right', type: params.log ? 'log' : 'linear' };
+                    if (!overlay) layout.annotations.push({ text: n, xref: 'paper', yref: 'paper', x: 0, y: domain[1], xanchor: 'left', yanchor: 'top', showarrow: false, font: { size: 10, color: lineColor(n, i) }, bgcolor: 'rgba(19,19,23,0.75)' });
+                }
+                const base = { type: 'scattergl', mode: 'lines', xaxis: 'x', yaxis: `y${axis}`, legendgroup: n, ...(styles[n]?.hidden ? { visible: 'legendonly' } : {}) };
+                data.push(...lineTraces(x, result.columns[n], result.group, filters, { ...base, name: n, color: lineColor(n, i) }));
             });
-            return <><LookaheadNote columns={result.lookahead} /><DownsampleNote result={result} /><Plot data={data} layout={layout} height={Math.max(320, 170 * rows)} /><ComparisonTable comparison={result.comparison} /></>;
+            return (
+                <>
+                    <LookaheadNote columns={result.lookahead} />
+                    <DownsampleNote result={result} />
+                    {result.filters?.length > 0 && <Figures items={result.filters.map((f, i) => [f.formula, `${(f.share * 100).toFixed(1)}% of the rows${filters[i]?.hidden ? ' · invisible' : ''}`])} />}
+                    {!shown.length
+                        ? <div className="ex-reading--EX">Every line is invisible: give one a color again.</div>
+                        : <Plot data={data} layout={layout} height={overlay ? 400 : Math.max(320, 180 * rows)} scaleDrag />}
+                    <ComparisonTable comparison={result.comparison} />
+                </>
+            );
         },
     },
 
@@ -364,13 +629,11 @@ export const PANEL_TYPES = {
 
     scatter: {
         label: 'Scatter', icon: '⁘', group: 'Relations',
-        description: 'Relation between two columns, with the mean of Y along X. Color by a column, or by filters (conditions with a color each).',
-        defaults: (c) => ({ x: c.numeric[0] || '', y: c.numeric[1] || c.numeric[0] || '', color: '', size: '', filters: [], default_color: '' }),
+        description: 'Relation between two columns, with the mean of Y along X. Color by a column, or by filters (conditions with a color each). Draw zones or cluster the visible window to get the share of each filter inside.',
+        defaults: (c) => ({ x: c.numeric[0] || '', y: c.numeric[1] || c.numeric[0] || '', color: '', size: '', filters: [], default_color: '', default_hidden: false }),
         Params: ({ params, set }) => {
             const filters = params.filters || [];
             const baseColor = params.default_color || CATEGORY_COLORS[0];
-            const update = (i, patch) => set({ filters: filters.map((f, k) => (k === i ? { ...f, ...patch } : f)) });
-            const add = () => set({ filters: [...filters, { formula: '', color: CATEGORY_COLORS[(filters.length + 1) % CATEGORY_COLORS.length] }] });
             return (
                 <>
                     <FormulaInput label="X" value={params.x} onChange={(x) => set({ x })} />
@@ -378,27 +641,21 @@ export const PANEL_TYPES = {
                     <FormulaInput label="Color by a column (optional)" value={params.color} onChange={(color) => set({ color })} />
                     <FormulaInput label="Size (optional)" value={params.size} onChange={(size) => set({ size })} />
                     <div className="ex-field--EX wide">
-                        <span>Filters — a point takes the color of the first filter it matches</span>
+                        <span>Filters — a point takes the color of the first colored filter it matches; an invisible filter always hides its points, wherever it is in the list</span>
                         <div className="ex-filters--EX">
                             <div className="ex-filter--EX default">
-                                <input type="color" value={baseColor} title="Color of the points that match no filter" onChange={(e) => set({ default_color: e.target.value })} />
+                                <ColorPick color={baseColor} hidden={params.default_hidden} title="Color of the points that match no filter"
+                                    onChange={({ color, hidden }) => set({ ...(color ? { default_color: color } : {}), default_hidden: !!hidden })} />
                                 <span>Default color — the points that match no filter</span>
-                                {params.default_color && <button type="button" title="Back to the standard color" onClick={() => set({ default_color: '' })}>↺</button>}
+                                {(params.default_color || params.default_hidden) && <button type="button" title="Back to the standard color" onClick={() => set({ default_color: '', default_hidden: false })}>↺</button>}
                             </div>
-                            {filters.map((f, i) => (
-                                <div key={i} className="ex-filter--EX">
-                                    <input type="color" value={f.color || CATEGORY_COLORS[(i + 1) % CATEGORY_COLORS.length]} title="Color of the points that match this filter" onChange={(e) => update(i, { color: e.target.value })} />
-                                    <ColumnInput value={f.formula || ''} placeholder="condition, e.g. trend_12 > 0" onChange={(formula) => update(i, { formula })} />
-                                    <button type="button" title="Remove this filter" onClick={() => set({ filters: filters.filter((_, k) => k !== i) })}>✕</button>
-                                </div>
-                            ))}
-                            <button type="button" className="ex-filter-add--EX" onClick={add}>+ Filter</button>
+                            <ColorFilters filters={filters} what="points" onChange={(next) => set({ filters: next })} colorOf={(i) => CATEGORY_COLORS[(i + 1) % CATEGORY_COLORS.length]} />
                         </div>
                     </div>
                 </>
             );
         },
-        Result: ({ result, params }) => {
+        Result: ({ result, params, ctx }) => {
             const sizes = result.size ? (() => {
                 const v = result.size.filter(s => s !== null);
                 const lo = Math.min(...v), hi = Math.max(...v);
@@ -406,7 +663,8 @@ export const PANEL_TYPES = {
             })() : 4;
             const baseColor = params.default_color || CATEGORY_COLORS[0];
             const groups = result.groups || [];
-            const filterColor = (i) => (params.filters || []).filter(f => (f.formula || '').trim())[i]?.color || CATEGORY_COLORS[(i + 1) % CATEGORY_COLORS.length];
+            const filterColor = (i) => activeFilters(params.filters)[i]?.color || CATEGORY_COLORS[(i + 1) % CATEGORY_COLORS.length];
+            const filterHidden = (i) => !!activeFilters(params.filters)[i]?.hidden;
             let data;
             if (result.color_kind === 'filters') {
                 const parts = [{ x: [], y: [], s: [] }, ...groups.map(() => ({ x: [], y: [], s: [] }))];   // 0 = aucun filtre
@@ -414,8 +672,8 @@ export const PANEL_TYPES = {
                     const part = parts[result.group[i] + 1];
                     part.x.push(x); part.y.push(result.y[i]); part.s.push(Array.isArray(sizes) ? sizes[i] : sizes);
                 });
-                data = [{ ...parts[0], type: 'scattergl', mode: 'markers', name: `no filter (${formatCount(result.other_n)})`, marker: { color: baseColor, size: parts[0].s, opacity: 0.4 } }];
-                groups.forEach((g, i) => data.push({
+                data = params.default_hidden ? [] : [{ ...parts[0], type: 'scattergl', mode: 'markers', name: `no filter (${formatCount(result.other_n)})`, marker: { color: baseColor, size: parts[0].s, opacity: 0.4 } }];
+                groups.forEach((g, i) => !filterHidden(i) && data.push({
                     x: parts[i + 1].x, y: parts[i + 1].y, type: 'scattergl', mode: 'markers', name: `${g.formula} (${formatCount(g.n)})`,
                     marker: { color: filterColor(i), size: parts[i + 1].s, opacity: 0.7 },
                 }));
@@ -442,14 +700,16 @@ export const PANEL_TYPES = {
                 data.push({ x: span, y: span.map(v => result.fit.intercept + result.fit.slope * v), type: 'scatter', mode: 'lines', name: 'linear fit', line: { color: 'rgba(255,255,255,0.5)', dash: 'dash', width: 1.5 } });
             }
             groups.forEach((g, i) => {
-                if (g.fit && span) data.push({ x: span, y: span.map(v => g.fit.intercept + g.fit.slope * v), type: 'scatter', mode: 'lines', name: `${g.formula} fit`, line: { color: filterColor(i), width: 2.5 } });
+                if (g.fit && span && !filterHidden(i)) data.push({ x: span, y: span.map(v => g.fit.intercept + g.fit.slope * v), type: 'scatter', mode: 'lines', name: `${g.formula} fit`, line: { color: filterColor(i), width: 2.5 } });
             });
             return (
                 <>
                     <LookaheadNote columns={result.lookahead} />
                     <Figures items={[['Rows', formatCount(result.n)], ['Pearson r', fmt(result.pearson, 4)], ['Spearman ρ', fmt(result.spearman, 4)], result.fit && ['Slope', fmt(result.fit.slope)],
                         ...groups.map(g => [g.formula, `${(g.share * 100).toFixed(0)}% · mean Y ${fmt(g.y_mean)}`])]} />
-                    <Plot data={data} layout={{ xaxis: { title: { text: params.x, font: { size: 10 } } }, yaxis: { title: { text: params.y, font: { size: 10 } } } }} height={440} />
+                    <ScatterZones data={data} layout={{ xaxis: { title: { text: params.x, font: { size: 10 } } }, yaxis: { title: { text: params.y, font: { size: 10 } } } }} height={440}
+                        params={params} ctx={ctx} classColor={(c) => (c === -1 ? baseColor : filterColor(c))}
+                        className={(c) => (c === -1 ? 'no filter' : activeFilters(params.filters)[c]?.formula || `filter ${c + 1}`)} />
                     <Reading>Pearson measures a straight-line relation, Spearman any monotonic one (rank-based, robust to outliers). The orange line shows the average Y in each slice of X: it reveals curved relations the numbers miss.{groups.length ? ' Each colored line is the linear fit of the points that took that filter\'s color: different slopes mean the relation changes with the condition.' : ''}</Reading>
                 </>
             );

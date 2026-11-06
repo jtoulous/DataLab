@@ -533,7 +533,26 @@ def _table(view, p):
 
 def _series(view, p):
     frame, lookahead = view.frame(p.get('columns') or view.numeric_columns()[:3])
+    lookahead = list(lookahead)
     comparison = _compare_curves(frame, p.get('reference'), p.get('compare_on', 'values')) if frame.shape[1] >= 2 else None
+    # filtres : chaque point prend l'indice du premier filtre qu'il verifie (-1 = aucun) -> couleur cote front
+    filters = [f for f in (p.get('filters') or []) if (f.get('formula') or '').strip() and not f.get('off')]
+    filter_info = []
+    if filters:
+        group = np.full(len(frame), -1)
+        masks = []
+        for f in filters:
+            mask, la = view.column(f['formula'], numeric=False)
+            if not _is_condition(mask):
+                raise FormulaError(f'Filter "{f["formula"]}" is not a condition — compare it, e.g. {f["formula"]} > 0')
+            if la:
+                lookahead.append(f['formula'])
+            masks.append(mask.reindex(frame.index).fillna(0).astype(bool).to_numpy())
+        # premier filtre colore qui matche ; un filtre invisible cache ses points quelle que soit sa place
+        for i in sorted(range(len(masks)), key=lambda i: (bool(filters[i].get('hidden')), -i)):
+            group[masks[i]] = i
+        frame = frame.assign(__g__=group)
+        filter_info = [{'formula': f['formula'], 'share': float(m.mean()) if len(m) else 0.0} for f, m in zip(filters, masks)]
     x_formula = p.get('x')
     if x_formula:
         x, _ = view.column(x_formula, numeric=False)
@@ -543,10 +562,12 @@ def _series(view, p):
         x_values = frame.index.to_series()
     step = max(1, int(np.ceil(len(frame) / MAX_POINTS)))
     frame, x_values = frame.iloc[::step], x_values.iloc[::step]
+    groups = frame.pop('__g__').astype(int).tolist() if filters else None
     return {
         'x': [_json(v) for v in x_values],
         'x_kind': 'time' if (not x_formula and view.time_index) or pd.api.types.is_datetime64_any_dtype(x_values) else 'number',
         'columns': {c: _clean_list(frame[c]) for c in frame.columns},
+        'group': groups, 'filters': filter_info,
         'lookahead': lookahead, 'downsampled': step > 1, 'rows': int(len(frame) * step), 'comparison': comparison,
     }
 
@@ -660,7 +681,7 @@ def _scatter(view, p):
     """
     x, la_x = view.column(p['x'])
     y, la_y = view.column(p['y'])
-    filters = [f for f in (p.get('filters') or []) if (f.get('formula') or '').strip()]
+    filters = [f for f in (p.get('filters') or []) if (f.get('formula') or '').strip() and not f.get('off')]
     data = {'x': x, 'y': y}
     color_kind = None
     lookahead = [f for f, la in ((p['x'], la_x), (p['y'], la_y)) if la]
@@ -689,7 +710,8 @@ def _scatter(view, p):
     groups = []
     if filters:
         assigned = np.full(len(frame), -1)
-        for i in reversed(range(len(filters))):       # le premier filtre gagne : on l'ecrit en dernier
+        # le premier filtre colore gagne (ecrit en dernier) ; les filtres invisibles passent apres tous : leurs points disparaissent toujours
+        for i in sorted(range(len(filters)), key=lambda i: (bool(filters[i].get('hidden')), -i)):
             assigned[frame[f'f{i}'].fillna(False).astype(bool).to_numpy()] = i
         frame['g'] = assigned
         for i, f in enumerate(filters):
@@ -1127,11 +1149,137 @@ def _missing(view, p):
     }
 
 
+###############################################################################################
+#####                         Zones et clusters du nuage de points                        #####
+#
+# Meme nuage que _scatter (x, y, filtres), mais sur TOUS les points (pas l'echantillon affiche).
+# Les points des filtres invisibles sont retires. Pour chaque zone (rectangle dessine) et chaque cluster
+# (calcule sur la fenetre visible, pour une classe donnee) : part de chaque classe dans la zone, comparee
+# a sa part globale, et separement sur les 70 % premiers / 30 % derniers points dans le temps (une zone
+# trouvee "a l'oeil" qui ne tient pas sur la fin est probablement du bruit).
+
+ZONE_SPLIT = 0.7
+MAX_CLUSTER_POINTS = 25_000
+
+
+def _scatter_classes(view, p):
+    x, _ = view.column(p['x'])
+    y, _ = view.column(p['y'])
+    filters = [f for f in (p.get('filters') or []) if (f.get('formula') or '').strip() and not f.get('off')]
+    data = {'x': x, 'y': y}
+    for i, f in enumerate(filters):
+        mask, _ = view.column(f['formula'], numeric=False)
+        if not _is_condition(mask):
+            raise FormulaError(f'Filter "{f["formula"]}" is not a condition — compare it, e.g. {f["formula"]} > 0')
+        data[f'f{i}'] = mask
+    frame = pd.DataFrame(data).dropna(subset=['x', 'y'])
+    g = np.full(len(frame), -1)
+    for i in sorted(range(len(filters)), key=lambda i: (bool(filters[i].get('hidden')), -i)):
+        g[frame[f'f{i}'].fillna(False).astype(bool).to_numpy()] = i
+    hidden = [i for i, f in enumerate(filters) if f.get('hidden')]
+    keep = ~np.isin(g, hidden)
+    frame = pd.DataFrame({'x': frame['x'].to_numpy(float)[keep], 'y': frame['y'].to_numpy(float)[keep], 'g': g[keep]}, index=frame.index[keep])
+    classes = [-1] + [i for i in range(len(filters)) if i not in hidden]
+    return frame, filters, classes
+
+
+def _class_shares(g, classes):
+    n = len(g)
+    return {str(c): (float((g == c).mean()) if n else None) for c in classes}
+
+
+def _zone_stats(frame, mask, classes, split):
+    g = frame['g'].to_numpy()
+    early = np.arange(len(frame)) < split
+    part = frame[mask]
+    return {
+        'n': int(mask.sum()),
+        'share': _class_shares(g[mask], classes),
+        'early': {'n': int((mask & early).sum()), 'share': _class_shares(g[mask & early], classes)},
+        'late': {'n': int((mask & ~early).sum()), 'share': _class_shares(g[mask & ~early], classes)},
+        'y_mean': _clean(float(part['y'].mean())) if len(part) else None,
+    }
+
+
+def _in_polygon(px, py, poly):
+    """Points (px, py) dans le polygone (liste de sommets) : lancer de rayon vectorise."""
+    inside = np.zeros(len(px), dtype=bool)
+    xs, ys = poly[:, 0], poly[:, 1]
+    j = len(poly) - 1
+    for i in range(len(poly)):
+        crosses = (ys[i] > py) != (ys[j] > py)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            at = (xs[j] - xs[i]) * (py - ys[i]) / (ys[j] - ys[i]) + xs[i]
+        inside ^= crosses & (px < at)
+        j = i
+    return inside
+
+
+def _clusters(frame, c, classes, split):
+    from sklearn.cluster import DBSCAN, KMeans
+    from scipy.spatial import ConvexHull
+    w = c.get('window') or {}
+    x0, x1 = sorted([float(w.get('x0', frame['x'].min())), float(w.get('x1', frame['x'].max()))])
+    y0, y1 = sorted([float(w.get('y0', frame['y'].min())), float(w.get('y1', frame['y'].max()))])
+    px, py = frame['x'].to_numpy(), frame['y'].to_numpy()
+    in_window = (px >= x0) & (px <= x1) & (py >= y0) & (py <= y1)
+    target = c.get('target')
+    pick = in_window & (frame['g'].to_numpy() == int(target)) if target is not None and target != '' else in_window
+    idx = np.flatnonzero(pick)
+    if len(idx) > MAX_CLUSTER_POINTS:
+        idx = np.sort(np.random.default_rng(0).choice(idx, MAX_CLUSTER_POINTS, replace=False))
+    if len(idx) < 5:
+        raise FormulaError('Not enough points of this class in the visible window to cluster')
+    # coordonnees normalisees sur la fenetre : un "rayon" de 3 % veut dire 3 % de ce qu'on voit, en X comme en Y
+    pts = np.column_stack([(px[idx] - x0) / ((x1 - x0) or 1), (py[idx] - y0) / ((y1 - y0) or 1)])
+    if c.get('algo') == 'kmeans':
+        labels = KMeans(n_clusters=max(1, min(int(c.get('k') or 4), len(idx))), n_init=4, random_state=0).fit_predict(pts)
+    else:
+        labels = DBSCAN(eps=float(c.get('eps') or 3) / 100, min_samples=max(2, int(c.get('min_points') or 15))).fit_predict(pts)
+    out = []
+    for label in set(labels) - {-1}:
+        members = idx[labels == label]
+        hull_pts = np.column_stack([px[members], py[members]])
+        try:
+            hull = hull_pts[ConvexHull(hull_pts).vertices]
+        except Exception:                                    # points alignes ou trop peu nombreux
+            continue
+        mask = np.zeros(len(frame), dtype=bool)
+        box = (px >= hull[:, 0].min()) & (px <= hull[:, 0].max()) & (py >= hull[:, 1].min()) & (py <= hull[:, 1].max())
+        mask[box] = _in_polygon(px[box], py[box], hull)
+        out.append({'members': int(len(members)), 'polygon': hull.tolist(),
+                    'box': {'x0': float(hull[:, 0].min()), 'x1': float(hull[:, 0].max()), 'y0': float(hull[:, 1].min()), 'y1': float(hull[:, 1].max())},
+                    **_zone_stats(frame, mask, classes, split)})
+    out.sort(key=lambda z: -z['members'])
+    return {'items': out[:15], 'points': int(pick.sum()), 'used': int(len(idx)), 'noise': int((labels == -1).sum())}
+
+
+def _scatter_zones(view, p):
+    frame, filters, classes = _scatter_classes(view, p)
+    split = int(len(frame) * ZONE_SPLIT)
+    px, py = frame['x'].to_numpy(), frame['y'].to_numpy()
+    zones = []
+    for z in p.get('zones') or []:
+        x0, x1 = sorted([float(z['x0']), float(z['x1'])])
+        y0, y1 = sorted([float(z['y0']), float(z['y1'])])
+        zones.append(_zone_stats(frame, (px >= x0) & (px <= x1) & (py >= y0) & (py <= y1), classes, split))
+    result = {
+        'classes': classes,
+        'base': _zone_stats(frame, np.ones(len(frame), dtype=bool), classes, split),
+        'zones': zones,
+        'split_at': _json(frame.index[split]) if 0 < split < len(frame) else None,
+    }
+    if p.get('cluster'):
+        result['clusters'] = _clusters(frame, p['cluster'], classes, split)
+    return result
+
+
 ANALYSES = {
     'table': _table, 'series': _series, 'stats': _stats, 'histogram': _histogram, 'box': _box,
     'scatter': _scatter, 'splom': _splom, 'correlation': _correlation, 'groupby': _groupby, 'pivot': _pivot,
     'time_heatmap': _time_heatmap, 'binned': _binned, 'event_study': _event_study, 'acf': _acf, 'xcorr': _xcorr,
     'runs': _runs, 'regression': _regression, 'pca': _pca, 'compare': _compare, 'missing': _missing,
+    'scatter_zones': _scatter_zones,
 }
 
 
